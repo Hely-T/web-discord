@@ -914,7 +914,8 @@ class Handler(BaseHTTPRequestHandler):
             access_token = token["access_token"]
             user = discord_get("/users/@me", access_token)
             guilds = owned_guilds(discord_get("/users/@me/guilds", access_token))
-        except (KeyError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+        except (KeyError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+            print(f"[oauth] callback failed: {type(exc).__name__}: {exc}")
             self.redirect("/?login=failed")
             return
         save_web_login(user, guilds)
