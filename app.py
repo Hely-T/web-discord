@@ -1266,13 +1266,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def cookie(self, name: str) -> str:
         cookie_header = self.headers.get("Cookie", "")
+        found = ""
         for chunk in cookie_header.split(";"):
             if "=" not in chunk:
                 continue
             key, value = chunk.strip().split("=", 1)
             if key == name:
-                return value
-        return ""
+                found = value
+        return found
 
     def cookie_value(self, name: str, value: str, http_only: bool = False) -> str:
         parts = [f"{name}={value}", "Path=/", "Max-Age=2592000", "SameSite=Lax"]
