@@ -61,6 +61,11 @@ def cookie_domain() -> str:
     return domain
 
 
+def cookie_domains() -> list[str]:
+    domain = cookie_domain()
+    return ["", domain] if domain else [""]
+
+
 def web_db() -> sqlite3.Connection:
     path = Path(CONFIG["web_db"])
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -967,7 +972,15 @@ class Handler(BaseHTTPRequestHandler):
         SESSIONS[sid] = {"user": user, "guilds": guilds, "created_at": time.time()}
         save_web_session(sid, user, guilds)
         next_view = str(state_data.get("next", "dashboard"))
-        self.redirect(oauth_next_url(next_view), cookies=[self.cookie_value("bl_session", sid, http_only=True)])
+        print(
+            "[oauth] login ok "
+            f"user={user.get('id', '')} sid={sid[:8]} next={next_view} "
+            f"cookie_domains={cookie_domains()}"
+        )
+        self.redirect(
+            oauth_next_url(next_view),
+            cookies=self.cookie_values("bl_session", sid, http_only=True),
+        )
 
     def current_session(self) -> dict | None:
         sid = self.cookie("bl_session")
@@ -1323,9 +1336,20 @@ class Handler(BaseHTTPRequestHandler):
                 found = value
         return found
 
-    def cookie_value(self, name: str, value: str, http_only: bool = False) -> str:
+    def cookie_values(self, name: str, value: str, http_only: bool = False) -> list[str]:
+        return [
+            self.cookie_value(name, value, http_only=http_only, domain=domain)
+            for domain in cookie_domains()
+        ]
+
+    def cookie_value(
+        self,
+        name: str,
+        value: str,
+        http_only: bool = False,
+        domain: str = "",
+    ) -> str:
         parts = [f"{name}={value}", "Path=/", "Max-Age=2592000", "SameSite=Lax"]
-        domain = cookie_domain()
         if domain:
             parts.append(f"Domain=.{domain}")
         if CONFIG["discord_redirect_uri"].startswith("https://"):
@@ -1337,13 +1361,13 @@ class Handler(BaseHTTPRequestHandler):
     def clear_cookie(self, name: str) -> None:
         self.send_response(HTTPStatus.FOUND)
         self.send_header("Location", "/")
-        parts = [f"{name}=", "Path=/", "Max-Age=0", "SameSite=Lax"]
-        domain = cookie_domain()
-        if domain:
-            parts.append(f"Domain=.{domain}")
-        if CONFIG["discord_redirect_uri"].startswith("https://"):
-            parts.append("Secure")
-        self.send_header("Set-Cookie", "; ".join(parts))
+        for domain in cookie_domains():
+            parts = [f"{name}=", "Path=/", "Max-Age=0", "SameSite=Lax"]
+            if domain:
+                parts.append(f"Domain=.{domain}")
+            if CONFIG["discord_redirect_uri"].startswith("https://"):
+                parts.append("Secure")
+            self.send_header("Set-Cookie", "; ".join(parts))
         self.end_headers()
 
     def log_message(self, fmt: str, *args: object) -> None:
