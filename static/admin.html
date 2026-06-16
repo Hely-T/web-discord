@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bleck Lous Admin</title>
+    <link rel="stylesheet" href="/admin.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="/admin">Bleck Lous</a>
+      <nav>
+        <a href="#keys">Keys</a>
+        <a href="#users">Users</a>
+        <a href="#requests">Requests</a>
+        <a href="/">Public Web</a>
+      </nav>
+    </aside>
+
+    <main class="admin-shell">
+      <header class="topbar">
+        <div>
+          <p>Admin Panel</p>
+          <h1>Quản lý web, key và user</h1>
+        </div>
+        <form class="login-box" id="adminLogin">
+          <input id="adminPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu admin" />
+          <button type="submit">Đăng nhập</button>
+        </form>
+      </header>
+
+      <section class="stats-grid" id="statsGrid">
+        <article>
+          <span>Keys</span>
+          <strong id="statKeys">0</strong>
+        </article>
+        <article>
+          <span>Users</span>
+          <strong id="statUsers">0</strong>
+        </article>
+        <article>
+          <span>Requests</span>
+          <strong id="statRequests">0</strong>
+        </article>
+      </section>
+
+      <section class="panel" id="keys">
+        <div class="panel-head">
+          <div>
+            <h2>Tạo key thuê bot tổng</h2>
+            <p>Key có hạn dùng, giới hạn số server và có thể khóa/gia hạn.</p>
+          </div>
+        </div>
+        <form class="tool-form locked" id="keyForm">
+          <input id="keyNote" placeholder="Ghi chú khách thuê" />
+          <input id="keyAmount" type="number" min="1" max="100" value="1" />
+          <input id="keyMaxGuilds" type="number" min="1" max="50" value="1" />
+          <input id="keyDurationDays" type="number" min="1" max="3650" value="30" />
+          <button type="submit">Tạo key</button>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Trạng thái</th>
+                <th>Hạn</th>
+                <th>Sử dụng</th>
+                <th>User sử dụng</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="keysTable">
+              <tr><td colspan="6">Đăng nhập admin để xem dữ liệu.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="users">
+        <div class="panel-head">
+          <div>
+            <h2>User</h2>
+            <p>Ban user, reset dữ liệu web, cấp quyền user/admin.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Trạng thái</th>
+                <th>Login</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="usersTable">
+              <tr><td colspan="5">Đăng nhập admin để xem dữ liệu.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="requests">
+        <div class="panel-head">
+          <div>
+            <h2>Yêu cầu</h2>
+            <p>Nạp tiền thủ công và thuê key đang chờ xử lý.</p>
+          </div>
+        </div>
+        <div class="request-grid">
+          <div>
+            <h3>Nạp tiền</h3>
+            <div class="list" id="topupList">Chưa có dữ liệu.</div>
+          </div>
+          <div>
+            <h3>Thuê key</h3>
+            <div class="list" id="rentalList">Chưa có dữ liệu.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/admin.js"></script>
+  </body>
+</html>

@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bleck Lous Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="#" data-view="home">
+          <span>Bleck Lous</span>
+        </a>
+        <nav class="nav">
+          <a href="#faq" data-view="faq">FAQ</a>
+          <a href="#commands" data-view="commands">COMMANDS</a>
+          <a href="#status" data-view="status">STATUS</a>
+          <a href="#dashboard" data-view="dashboard">DASHBOARD</a>
+          <a href="#support" data-view="support">SUPPORT</a>
+          <a id="loginLink" href="/auth/login">LOGIN</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-art" aria-hidden="true">
+            <div class="coin coin-one">$</div>
+            <div class="coin coin-two">7</div>
+            <div class="coin coin-three">♠</div>
+            <div class="console">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          <div class="hero-copy">
+            <h1>BLECK LOUS<br /><span>1 IN 2 DISCORD BOT</span></h1>
+            <div class="hero-actions invite-row">
+              <a class="invite-button red" id="casinoInvite" href="#dashboard" data-view="dashboard">
+                <span class="invite-icon">BL</span>
+                <strong>INVITE CASINO</strong>
+              </a>
+              <form class="hero-key-form" id="homeKeyForm">
+                <input id="homeKeyInput" autocomplete="off" placeholder="Nhập key bot tổng" />
+                <button class="invite-button cyan" type="submit">
+                  <span class="invite-icon">KEY</span>
+                  <strong>INVITE BOT TỔNG</strong>
+                </button>
+              </form>
+            </div>
+            <p class="hero-note" id="homeKeyMessage">Bot casino public. Bot tổng cần key thuê trước khi invite.</p>
+          </div>
+        </section>
+
+        <section class="detail-area hidden" id="detailArea">
+          <section class="detail-panel hidden" id="faq">
+            <div class="section-title">
+              <h2>FAQ</h2>
+              <span id="domain">nadnasdaq-fx.com</span>
+            </div>
+            <div class="info-grid">
+              <article class="info-card">
+                <h3>Bot Bleck Lous.</h3>
+                <p>Bot quản lý server. Bot tổng cần thuê để quản lý server, quản lý booking và donate cho server. Login Discord, chọn server, nhập key rồi invite bot.</p>
+              </article>
+              <article class="info-card">
+                <h3>Bot Casino Public</h3>
+                <p>Bot casino có thể invite trực tiếp vào server có các game hiện nay nhưng không dùng tiền thật, chỉ chơi vui với nhau bằng tiền OwO. Liên hệ Server Support để quy đổi.</p>
+              </article>
+              <article class="info-card">
+                <h3>Mỗi server có database riêng?</h3>
+                <p>Web quản lý key theo từng server. Dữ liệu bot vẫn nằm trong database của bot trên VPS.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="detail-panel hidden" id="commands">
+            <div class="section-title">
+              <h2>Commands</h2>
+              <span>Lệnh chính của 2 bot</span>
+            </div>
+            <div class="info-grid">
+              <article class="info-card red-line">
+                <h3>Casino</h3>
+                <p>taixiu, baucua, blackjack, balance, transfer, history.</p>
+              </article>
+              <article class="info-card cyan-line">
+                <h3>Bot tổng</h3>
+                <p>naptien, donate, ticket, level, music, role, booking, admin tools.</p>
+              </article>
+              <article class="info-card pink-line">
+                <h3>Admin</h3>
+                <p>pull, reload, status, command toggle, role permission, cash log.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="detail-panel hidden" id="status">
+            <div class="section-title">
+              <h2>Bot Status</h2>
+              <span id="updated">Đang tải...</span>
+            </div>
+            <div class="status-grid" id="statusGrid"></div>
+          </section>
+
+          <section class="detail-panel hidden" id="dashboard">
+            <div class="section-title">
+              <h2>Dashboard</h2>
+              <span>Login Discord để nạp tiền, thuê key và invite bot tổng</span>
+            </div>
+            <div class="dashboard-grid">
+              <div class="portal-panel" id="portalPanel"></div>
+              <div class="admin-panel dashboard-action hidden" id="dashboardActions">
+                <form class="dashboard-form" id="topupForm">
+                  <h3>Nạp tiền thủ công</h3>
+                  <input id="topupAmount" type="number" min="1000" step="1000" placeholder="Số tiền VNĐ" />
+                  <input id="topupNote" placeholder="Ghi chú chuyển khoản / Discord" />
+                  <button type="submit">GỬI YÊU CẦU NẠP</button>
+                </form>
+                <form class="dashboard-form" id="rentForm">
+                  <h3>Thuê key bot tổng</h3>
+                  <select id="rentGuild"></select>
+                  <input id="rentMonths" type="number" min="1" max="24" value="1" />
+                  <input id="rentNote" placeholder="Gói thuê / ghi chú cho admin" />
+                  <button type="submit">GỬI YÊU CẦU THUÊ</button>
+                </form>
+                <div class="rank-list compact-list" id="requestList">
+                  <div class="empty">Chưa có yêu cầu nào.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="detail-panel hidden" id="support">
+            <div class="section-title">
+              <h2>Support</h2>
+              <span>Liên hệ admin hoặc nạp tiền thủ công</span>
+            </div>
+            <div class="split">
+              <div>
+                <div class="section-title compact">
+                  <h2>Donate</h2>
+                  <span id="paidAmount">0 VNĐ</span>
+                </div>
+                <div class="rank-list" id="donateTop"></div>
+              </div>
+              <div>
+                <div class="section-title compact">
+                  <h2>Tìm User</h2>
+                  <span>Discord ID hoặc tên</span>
+                </div>
+                <form class="search-box" id="searchForm">
+                  <input id="searchInput" name="q" autocomplete="off" placeholder="Nhập tối thiểu 3 ký tự" />
+                  <button type="submit">TÌM</button>
+                </form>
+                <div class="rank-list search-results" id="searchResults"></div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>
