@@ -808,11 +808,7 @@ def public_summary() -> dict:
             "domain": CONFIG["domain"],
             "updated_at": now,
             "contact_url": CONFIG["contact_url"],
-            "login_enabled": bool(
-                CONFIG["discord_client_id"]
-                and CONFIG["discord_client_secret"]
-                and CONFIG["discord_redirect_uri"]
-            ),
+            "login_enabled": login_enabled(),
         },
         "status": status_summary(cash, bank, casino),
         "cash": cash,
@@ -821,10 +817,34 @@ def public_summary() -> dict:
     }
 
 
+def login_enabled() -> bool:
+    return bool(
+        CONFIG["discord_client_id"]
+        and CONFIG["discord_client_secret"]
+        and CONFIG["discord_redirect_uri"]
+    )
+
+
+def oauth_next_url(next_view: str) -> str:
+    if next_view == "dashboard":
+        return "/dashboard"
+    if next_view == "admin":
+        return "/admin"
+    if next_view in {"status", "support"}:
+        return f"/#{next_view}"
+    return "/"
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "BleckLousWeb/1.0"
 
+    def do_HEAD(self) -> None:
+        self.route(send_body=False)
+
     def do_GET(self) -> None:
+        self.route(send_body=True)
+
+    def route(self, send_body: bool) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/auth/login":
             self.handle_login(parsed.query)
@@ -851,15 +871,18 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_admin_snapshot()
             return
         if parsed.path == "/admin":
-            self.send_file(STATIC_DIR / "admin.html")
+            self.send_file(STATIC_DIR / "admin.html", send_body=send_body)
+            return
+        if parsed.path == "/dashboard" and not self.current_session():
+            self.redirect("/auth/login?next=dashboard")
             return
         if parsed.path in {"/", "/status", "/dashboard"}:
-            self.send_file(STATIC_DIR / "index.html")
+            self.send_file(STATIC_DIR / "index.html", send_body=send_body)
             return
         safe_path = parsed.path.lstrip("/")
         target = (STATIC_DIR / safe_path).resolve()
         if STATIC_DIR in target.parents and target.exists() and target.is_file():
-            self.send_file(target)
+            self.send_file(target, send_body=send_body)
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
@@ -895,7 +918,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def handle_login(self, query: str = "") -> None:
-        if not public_summary()["app"]["login_enabled"]:
+        if not login_enabled():
             self.redirect("/")
             return
         params_in = parse_qs(query)
@@ -944,7 +967,7 @@ class Handler(BaseHTTPRequestHandler):
         SESSIONS[sid] = {"user": user, "guilds": guilds, "created_at": time.time()}
         save_web_session(sid, user, guilds)
         next_view = str(state_data.get("next", "dashboard"))
-        self.redirect(f"/#{next_view}", cookies=[self.cookie_value("bl_session", sid, http_only=True)])
+        self.redirect(oauth_next_url(next_view), cookies=[self.cookie_value("bl_session", sid, http_only=True)])
 
     def current_session(self) -> dict | None:
         sid = self.cookie("bl_session")
@@ -1268,16 +1291,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def send_file(self, path: Path) -> None:
+    def send_file(self, path: Path, send_body: bool = True) -> None:
         body = path.read_bytes()
         content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         if path.suffix == ".html":
             content_type = "text/html; charset=utf-8"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
+        if path.suffix in {".html", ".js", ".css"}:
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if send_body:
+            self.wfile.write(body)
 
     def redirect(self, url: str, cookies: list[str] | None = None) -> None:
         self.send_response(HTTPStatus.FOUND)
