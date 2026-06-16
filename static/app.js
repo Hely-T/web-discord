@@ -316,6 +316,10 @@ async function loadSummary() {
   document.title = `${currentSummary.app.brand} Dashboard`;
   setText("domain", currentSummary.app.domain);
   setText("updated", `Cập nhật ${new Date(currentSummary.app.updated_at * 1000).toLocaleString("vi-VN")}`);
+  setText("homeUsers", money(currentSummary.cash.users || currentSummary.casino.players));
+  setText("homeCash", money(currentSummary.cash.cash_total, " VNĐ"));
+  setText("homeOwo", money(currentSummary.casino.owo_total, " OWO"));
+  setText("homeTx", money(currentSummary.casino.transactions));
   renderStatus(currentSummary.status);
 
   renderRows("cashTop", currentSummary.cash.top, {

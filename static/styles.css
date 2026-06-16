@@ -331,6 +331,10 @@ h1 span {
   font-weight: 800;
 }
 
+.home-overview {
+  padding: 0 0 56px;
+}
+
 .section {
   margin: 26px 0;
 }
