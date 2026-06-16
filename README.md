@@ -41,7 +41,7 @@ Vào `http://localhost:8088/admin`, nhập mật khẩu, tạo key, sau đó log
 Đường dẫn:
 
 ```text
-https://nadnasdaq-fx.com/admin
+https://nasdaq-fx.com/admin
 ```
 
 Chức năng hiện có:
@@ -63,7 +63,7 @@ Trong Discord Developer Portal của web/app chính:
 2. Thêm redirect URL:
 
 ```text
-https://nadnasdaq-fx.com/auth/callback
+https://nasdaq-fx.com/auth/callback
 ```
 
 3. Điền `.env`:
@@ -71,7 +71,7 @@ https://nadnasdaq-fx.com/auth/callback
 ```env
 DISCORD_CLIENT_ID=client_id_cua_app
 DISCORD_CLIENT_SECRET=client_secret_cua_app
-DISCORD_REDIRECT_URI=https://nadnasdaq-fx.com/auth/callback
+DISCORD_REDIRECT_URI=https://nasdaq-fx.com/auth/callback
 CASINO_BOT_CLIENT_ID=client_id_bot_casino
 GENERAL_BOT_CLIENT_ID=client_id_bot_tong
 ADMIN_PASSWORD=mat_khau_admin_manh
@@ -96,27 +96,27 @@ After=network.target
 [Service]
 WorkingDirectory=/opt/bleck-lous-web
 Environment=APP_BRAND=Bleck Lous
-Environment=PUBLIC_DOMAIN=nadnasdaq-fx.com
+Environment=PUBLIC_DOMAIN=nasdaq-fx.com
 Environment=HOST=127.0.0.1
 Environment=PORT=8088
-Environment=WEB_DB_PATH=/opt/bleck-lous-web/web.sqlite3
+Environment=WEB_DB_PATH=/opt/discord-bots/main-bot/database/web-dashboard/web.sqlite3
 Environment=DISCORD_CLIENT_ID=your_web_client_id
 Environment=DISCORD_CLIENT_SECRET=your_web_client_secret
-Environment=DISCORD_REDIRECT_URI=https://nadnasdaq-fx.com/auth/callback
+Environment=DISCORD_REDIRECT_URI=https://nasdaq-fx.com/auth/callback
 Environment=CASINO_BOT_CLIENT_ID=casino_bot_client_id
 Environment=GENERAL_BOT_CLIENT_ID=general_bot_client_id
 Environment=ADMIN_PASSWORD=change_this_password
 Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
-Environment=CASH_DB_PATH=/opt/bot-discord/database/users.db
-Environment=BANK_DB_PATH=/opt/bot-discord/database/bank_payments.db
-Environment=CASINO_DB_PATH=/opt/casino/database/casino.db
+Environment=CASH_DB_PATH=/opt/discord-bots/main-bot/database/users.db
+Environment=BANK_DB_PATH=/opt/discord-bots/main-bot/database/bank_payments.db
+Environment=CASINO_DB_PATH=/opt/discord-bots/casino-bot/database/casino.db
 ExecStart=/usr/bin/python3 /opt/bleck-lous-web/app.py
 Restart=always
 RestartSec=3
-User=www-data
-Group=www-data
+User=root
+Group=root
 
 [Install]
 WantedBy=multi-user.target
@@ -133,7 +133,7 @@ Nginx reverse proxy:
 ```nginx
 server {
     listen 80;
-    server_name nadnasdaq-fx.com www.nadnasdaq-fx.com;
+    server_name nasdaq-fx.com www.nasdaq-fx.com;
 
     location / {
         proxy_pass http://127.0.0.1:8088;
@@ -148,7 +148,7 @@ server {
 Sau đó bật HTTPS:
 
 ```bash
-sudo certbot --nginx -d nadnasdaq-fx.com -d www.nadnasdaq-fx.com
+sudo certbot --nginx -d nasdaq-fx.com -d www.nasdaq-fx.com
 ```
 
 ## Ghi chú database
@@ -158,6 +158,18 @@ sudo certbot --nginx -d nadnasdaq-fx.com -d www.nadnasdaq-fx.com
 - `CASINO_DB_PATH`: file casino Go, chứa `users.balance`, `transaction_logs`, `game_history`.
 
 Web mở database bằng chế độ read-only, phù hợp để chạy chung VPS với bot.
+
+Database riêng của web nên để chung khu database bot để dễ backup và mở bằng tool DB:
+
+```text
+/opt/discord-bots/main-bot/database/web-dashboard/web.sqlite3
+```
+
+Tạo folder trước khi chạy service:
+
+```bash
+sudo mkdir -p /opt/discord-bots/main-bot/database/web-dashboard
+```
 
 ## Push GitHub
 

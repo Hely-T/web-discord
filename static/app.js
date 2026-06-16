@@ -103,9 +103,30 @@ function renderRows(id, rows, options) {
   }).join("");
 }
 
+function renderHeaderState(me) {
+  const loginLink = byId("loginLink");
+  if (!loginLink || !me) return;
+  if (!me.logged_in) {
+    loginLink.textContent = "LOGIN";
+    loginLink.href = "/auth/login?next=dashboard";
+    loginLink.classList.remove("logged-in");
+    setText("dashboardSubtitle", "Login Discord để nạp tiền, thuê key và invite bot tổng");
+    return;
+  }
+
+  loginLink.innerHTML = `
+    <span>${escapeHtml(me.user.username)}</span>
+    <small>${escapeHtml(me.user.role || "user")}</small>
+  `;
+  loginLink.href = "/auth/logout";
+  loginLink.classList.add("logged-in");
+  setText("dashboardSubtitle", `Đã login Discord: ${me.user.username}`);
+}
+
 function renderPortal(me, summary) {
   const panel = byId("portalPanel");
   const actions = byId("dashboardActions");
+  renderHeaderState(me);
   if (!me.logged_in) {
     actions.classList.add("hidden");
     panel.innerHTML = `
@@ -120,8 +141,6 @@ function renderPortal(me, summary) {
     return;
   }
 
-  byId("loginLink").textContent = "LOGOUT";
-  byId("loginLink").href = "/auth/logout";
   actions.classList.remove("hidden");
   renderRentGuilds(me.guilds);
   renderRequests(me.requests);
@@ -147,10 +166,18 @@ function renderPortal(me, summary) {
   panel.innerHTML = `
     <div class="account-strip">
       <div>
+        <div class="label">Tài khoản Discord</div>
         <div class="user-name">${escapeHtml(me.user.username)}</div>
-        <div class="user-meta">Discord ID ${escapeHtml(me.user.id)}</div>
+        <div class="user-meta">Discord ID ${escapeHtml(me.user.id)} · ${escapeHtml(me.user.status)} · ${escapeHtml(me.user.role)}</div>
       </div>
-      <a class="tiny-button" href="${summary.app.contact_url}">LIÊN HỆ ADMIN</a>
+      <div class="account-actions">
+        <a class="tiny-button cyan" href="${summary.app.contact_url}">LIÊN HỆ ADMIN</a>
+        <a class="tiny-button" href="/auth/logout">LOGOUT</a>
+      </div>
+    </div>
+    <div class="dashboard-hint">
+      <strong>Server bạn quản lý</strong>
+      <span>Invite casino trực tiếp. Bot tổng cần kích hoạt key theo từng server.</span>
     </div>
     ${guildCards}
   `;

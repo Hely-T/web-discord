@@ -26,7 +26,7 @@ def env_path(name: str, default: str) -> str:
 
 CONFIG = {
     "brand": os.getenv("APP_BRAND", "Bleck Lous"),
-    "domain": os.getenv("PUBLIC_DOMAIN", "nadnasdaq-fx.com"),
+    "domain": os.getenv("PUBLIC_DOMAIN", "nasdaq-fx.com"),
     "cash_db": env_path("CASH_DB_PATH", "/opt/bot-discord/database/users.db"),
     "bank_db": env_path("BANK_DB_PATH", "/opt/bot-discord/database/bank_payments.db"),
     "casino_db": env_path("CASINO_DB_PATH", "/opt/casino/database/casino.db"),
@@ -84,6 +84,18 @@ def init_web_db() -> None:
                 manageable INTEGER NOT NULL DEFAULT 1,
                 last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (discord_user_id, guild_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS web_sessions (
+                sid TEXT PRIMARY KEY,
+                discord_user_id TEXT NOT NULL,
+                user_json TEXT NOT NULL,
+                guilds_json TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                last_seen_at INTEGER NOT NULL
             )
             """
         )
@@ -165,14 +177,17 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -
 
 def connect_readonly(path: str) -> sqlite3.Connection | None:
     db_path = Path(path)
-    if not db_path.exists():
+    try:
+        if not db_path.exists():
+            return None
+        uri = f"file:{db_path}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only = 1")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        return conn
+    except (OSError, sqlite3.Error):
         return None
-    uri = f"file:{db_path}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True, timeout=5)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA query_only = 1")
-    conn.execute("PRAGMA busy_timeout = 5000")
-    return conn
 
 
 def fetch_all(path: str, sql: str, params: tuple = ()) -> list[dict]:
@@ -452,6 +467,66 @@ def save_web_login(user: dict, guilds: list[dict]) -> None:
             )
 
 
+def save_web_session(sid: str, user: dict, guilds: list[dict]) -> None:
+    now = int(time.time())
+    with web_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO web_sessions (
+                sid, discord_user_id, user_json, guilds_json, created_at, last_seen_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(sid) DO UPDATE SET
+                user_json = excluded.user_json,
+                guilds_json = excluded.guilds_json,
+                last_seen_at = excluded.last_seen_at
+            """,
+            (
+                sid,
+                str(user.get("id", "")),
+                json.dumps(user),
+                json.dumps(guilds),
+                now,
+                now,
+            ),
+        )
+
+
+def load_web_session(sid: str) -> dict | None:
+    if not sid:
+        return None
+    with web_db() as conn:
+        row = conn.execute(
+            """
+            SELECT user_json, guilds_json
+            FROM web_sessions
+            WHERE sid = ?
+            """,
+            (sid,),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE web_sessions SET last_seen_at = ? WHERE sid = ?",
+            (int(time.time()), sid),
+        )
+    try:
+        return {
+            "user": json.loads(row["user_json"]),
+            "guilds": json.loads(row["guilds_json"]),
+            "created_at": time.time(),
+        }
+    except json.JSONDecodeError:
+        return None
+
+
+def delete_web_session(sid: str) -> None:
+    if not sid:
+        return
+    with web_db() as conn:
+        conn.execute("DELETE FROM web_sessions WHERE sid = ?", (sid,))
+
+
 def user_requests(discord_user_id: str) -> dict:
     with web_db() as conn:
         topups = conn.execute(
@@ -726,6 +801,7 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_callback(parsed.query)
             return
         if parsed.path == "/auth/logout":
+            delete_web_session(self.cookie("bl_session"))
             self.clear_cookie("bl_session")
             return
         if parsed.path == "/api/me":
@@ -833,6 +909,7 @@ class Handler(BaseHTTPRequestHandler):
         save_web_login(user, guilds)
         sid = secrets.token_urlsafe(32)
         SESSIONS[sid] = {"user": user, "guilds": guilds, "created_at": time.time()}
+        save_web_session(sid, user, guilds)
         next_view = str(state_data.get("next", "dashboard"))
         self.redirect(f"/#{next_view}", cookies=[self.cookie_value("bl_session", sid, http_only=True)])
 
@@ -840,7 +917,13 @@ class Handler(BaseHTTPRequestHandler):
         sid = self.cookie("bl_session")
         if not sid:
             return None
-        return SESSIONS.get(sid)
+        session = SESSIONS.get(sid)
+        if session:
+            return session
+        session = load_web_session(sid)
+        if session:
+            SESSIONS[sid] = session
+        return session
 
     def current_user_payload(self) -> dict:
         session = self.current_session()
