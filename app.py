@@ -5,6 +5,7 @@ import mimetypes
 import os
 import secrets
 import sqlite3
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -47,6 +48,7 @@ CONFIG = {
 SESSIONS: dict[str, dict] = {}
 OAUTH_STATES: dict[str, dict] = {}
 ADMIN_SESSIONS: set[str] = set()
+DB_WARNINGS: dict[str, str] = {}
 
 
 def cookie_domain() -> str:
@@ -190,14 +192,18 @@ def connect_readonly(path: str) -> sqlite3.Connection | None:
     db_path = Path(path)
     try:
         if not db_path.exists():
+            DB_WARNINGS[path] = "not found"
             return None
         uri = f"file:{db_path}?mode=ro"
         conn = sqlite3.connect(uri, uri=True, timeout=5)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA query_only = 1")
         conn.execute("PRAGMA busy_timeout = 5000")
+        DB_WARNINGS.pop(path, None)
         return conn
-    except (OSError, sqlite3.Error):
+    except (OSError, sqlite3.Error) as exc:
+        DB_WARNINGS[path] = f"{type(exc).__name__}: {exc}"
+        print(f"[db] read-only open failed for {path}: {exc}", file=sys.stderr)
         return None
 
 
@@ -208,7 +214,9 @@ def fetch_all(path: str, sql: str, params: tuple = ()) -> list[dict]:
     try:
         rows = conn.execute(sql, params).fetchall()
         return [dict(row) for row in rows]
-    except sqlite3.Error:
+    except sqlite3.Error as exc:
+        DB_WARNINGS[path] = f"{type(exc).__name__}: {exc}"
+        print(f"[db] query failed for {path}: {exc}", file=sys.stderr)
         return []
     finally:
         conn.close()
@@ -220,12 +228,25 @@ def fetch_one(path: str, sql: str, params: tuple = ()) -> dict:
 
 
 def table_exists(path: str, table: str) -> bool:
-    row = fetch_one(
-        path,
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-        (table,),
-    )
-    return bool(row)
+    try:
+        row = fetch_one(
+            path,
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        )
+        return bool(row)
+    except Exception as exc:
+        DB_WARNINGS[path] = f"{type(exc).__name__}: {exc}"
+        print(f"[db] table check failed for {path}: {exc}", file=sys.stderr)
+        return False
+
+
+def unavailable_summary(path: str, **values: object) -> dict:
+    payload = {"available": False, **values}
+    warning = DB_WARNINGS.get(path)
+    if warning:
+        payload["error"] = warning
+    return payload
 
 
 def int_value(value: object, default: int = 0) -> int:
@@ -643,13 +664,13 @@ def licensed_server_count() -> int:
 
 def cash_summary() -> dict:
     if not table_exists(CONFIG["cash_db"], "users"):
-        return {
-            "available": False,
-            "users": 0,
-            "cash_total": 0,
-            "donate_total": 0,
-            "top": [],
-        }
+        return unavailable_summary(
+            CONFIG["cash_db"],
+            users=0,
+            cash_total=0,
+            donate_total=0,
+            top=[],
+        )
 
     row = fetch_one(
         CONFIG["cash_db"],
@@ -681,14 +702,14 @@ def cash_summary() -> dict:
 
 def bank_summary() -> dict:
     if not table_exists(CONFIG["bank_db"], "bank_payments"):
-        return {
-            "available": False,
-            "paid": 0,
-            "pending": 0,
-            "paid_amount": 0,
-            "recent": [],
-            "donate_top": [],
-        }
+        return unavailable_summary(
+            CONFIG["bank_db"],
+            paid=0,
+            pending=0,
+            paid_amount=0,
+            recent=[],
+            donate_top=[],
+        )
 
     row = fetch_one(
         CONFIG["bank_db"],
@@ -730,14 +751,14 @@ def bank_summary() -> dict:
 
 def casino_summary() -> dict:
     if not table_exists(CONFIG["casino_db"], "users"):
-        return {
-            "available": False,
-            "players": 0,
-            "owo_total": 0,
-            "transactions": 0,
-            "top": [],
-            "games": [],
-        }
+        return unavailable_summary(
+            CONFIG["casino_db"],
+            players=0,
+            owo_total=0,
+            transactions=0,
+            top=[],
+            games=[],
+        )
 
     users = fetch_one(
         CONFIG["casino_db"],
