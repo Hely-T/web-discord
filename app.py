@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import base64
+import binascii
+import hashlib
+import hmac
 import mimetypes
 import os
 import secrets
@@ -46,9 +50,51 @@ CONFIG = {
 }
 
 SESSIONS: dict[str, dict] = {}
-OAUTH_STATES: dict[str, dict] = {}
 ADMIN_SESSIONS: set[str] = set()
 DB_WARNINGS: dict[str, str] = {}
+
+
+def auth_secret() -> bytes:
+    secret = (
+        CONFIG["discord_client_secret"]
+        or CONFIG["admin_password"]
+        or CONFIG["brand"]
+        or "bleck-lous-web"
+    )
+    return secret.encode("utf-8")
+
+
+def b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def b64url_decode(data: str) -> bytes:
+    return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))
+
+
+def make_oauth_state(next_view: str) -> str:
+    payload = {"next": next_view, "created_at": int(time.time()), "nonce": secrets.token_urlsafe(12)}
+    body = b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    sig = hmac.new(auth_secret(), body.encode("ascii"), hashlib.sha256).digest()
+    return f"{body}.{b64url_encode(sig)}"
+
+
+def read_oauth_state(state: str) -> dict:
+    try:
+        body, sig = state.split(".", 1)
+        expected = hmac.new(auth_secret(), body.encode("ascii"), hashlib.sha256).digest()
+        if not hmac.compare_digest(b64url_decode(sig), expected):
+            raise ValueError("bad signature")
+        payload = json.loads(b64url_decode(body).decode("utf-8"))
+        if int(time.time()) - int(payload.get("created_at", 0)) > 600:
+            raise ValueError("expired")
+        next_view = str(payload.get("next", "dashboard"))
+        if next_view not in {"dashboard", "admin", "status", "support"}:
+            next_view = "dashboard"
+        return {"next": next_view}
+    except (ValueError, TypeError, json.JSONDecodeError, binascii.Error) as exc:
+        print(f"[oauth] invalid state: {exc}")
+        return {}
 
 
 def cookie_domain() -> str:
@@ -930,8 +976,7 @@ class Handler(BaseHTTPRequestHandler):
         next_view = params_in.get("next", ["dashboard"])[0]
         if next_view not in {"dashboard", "admin", "status", "support"}:
             next_view = "dashboard"
-        state = secrets.token_urlsafe(24)
-        OAUTH_STATES[state] = {"created_at": time.time(), "next": next_view}
+        state = make_oauth_state(next_view)
         params = {
             "client_id": CONFIG["discord_client_id"],
             "redirect_uri": CONFIG["discord_redirect_uri"],
@@ -945,10 +990,14 @@ class Handler(BaseHTTPRequestHandler):
         params = parse_qs(query)
         code = params.get("code", [""])[0]
         state = params.get("state", [""])[0]
-        if not code or state not in OAUTH_STATES:
+        state_data = read_oauth_state(state)
+        if not code or not state_data:
+            print(
+                "[oauth] callback rejected "
+                f"has_code={bool(code)} has_state={bool(state)} path=/auth/callback"
+            )
             self.redirect("/?login=failed")
             return
-        state_data = OAUTH_STATES.pop(state, {"next": "dashboard"})
         try:
             token = post_form(
                 "https://discord.com/api/oauth2/token",
