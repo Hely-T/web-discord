@@ -41,11 +41,22 @@ CONFIG = {
     "contact_url": os.getenv("CONTACT_ADMIN_URL", "https://discord.com"),
     "casino_server_count": os.getenv("CASINO_SERVER_COUNT", ""),
     "general_server_count": os.getenv("GENERAL_SERVER_COUNT", ""),
+    "cookie_domain": os.getenv("COOKIE_DOMAIN", ""),
 }
 
 SESSIONS: dict[str, dict] = {}
 OAUTH_STATES: dict[str, dict] = {}
 ADMIN_SESSIONS: set[str] = set()
+
+
+def cookie_domain() -> str:
+    configured = CONFIG["cookie_domain"].strip()
+    domain = configured or CONFIG["domain"].strip()
+    if not domain or domain in {"localhost", "127.0.0.1"} or ":" in domain:
+        return ""
+    if domain.startswith("www."):
+        domain = domain[4:]
+    return domain
 
 
 def web_db() -> sqlite3.Connection:
@@ -1264,7 +1275,12 @@ class Handler(BaseHTTPRequestHandler):
         return ""
 
     def cookie_value(self, name: str, value: str, http_only: bool = False) -> str:
-        parts = [f"{name}={value}", "Path=/", "SameSite=Lax"]
+        parts = [f"{name}={value}", "Path=/", "Max-Age=2592000", "SameSite=Lax"]
+        domain = cookie_domain()
+        if domain:
+            parts.append(f"Domain=.{domain}")
+        if CONFIG["discord_redirect_uri"].startswith("https://"):
+            parts.append("Secure")
         if http_only:
             parts.append("HttpOnly")
         return "; ".join(parts)
@@ -1272,7 +1288,13 @@ class Handler(BaseHTTPRequestHandler):
     def clear_cookie(self, name: str) -> None:
         self.send_response(HTTPStatus.FOUND)
         self.send_header("Location", "/")
-        self.send_header("Set-Cookie", f"{name}=; Path=/; Max-Age=0; SameSite=Lax")
+        parts = [f"{name}=", "Path=/", "Max-Age=0", "SameSite=Lax"]
+        domain = cookie_domain()
+        if domain:
+            parts.append(f"Domain=.{domain}")
+        if CONFIG["discord_redirect_uri"].startswith("https://"):
+            parts.append("Secure")
+        self.send_header("Set-Cookie", "; ".join(parts))
         self.end_headers()
 
     def log_message(self, fmt: str, *args: object) -> None:
