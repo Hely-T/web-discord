@@ -1,0 +1,1 @@
+"""Legacy Discord cog package."""

@@ -1,0 +1,42 @@
+{
+  "prefix": "$",
+  "token": "PUT_DISCORD_TOKEN_HERE",
+  "rpc": {
+    "enabled": false,
+    "name": "kinntobieedasick",
+    "details": "kinn.",
+    "state": "i miss her"
+  },
+  "token_owo": [
+    {
+      "0": ""
+    }
+  ],
+  "watchers": [
+    "Token To Check mess to snipe code"
+  ],
+  "tokens_nitro": {
+    "claim": "Token Account to claim nitro"
+  },
+  "notify_nitro": {
+    "success": true,
+    "failed": true
+  },
+  "webhooks": {
+    "farm_status": "https://...",
+    "ban_alert": "https://...",
+    "daily_complete": "https://...",
+    "nitro_success": "https://...",
+    "nitro_failed": "https://..."
+  },
+  "ai_config": {
+    "gemini_keys": [
+      "Keys Here"
+    ],
+    "gemini_model": "gemini-2.5-flash",
+    "chatgpt_keys": [
+      "Keys Here"
+    ],
+    "chatgpt_api_url": "https://ai.seal.io.vn/v1/chat/completions"
+  }
+}

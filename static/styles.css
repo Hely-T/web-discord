@@ -374,10 +374,15 @@ h1 span {
 
 .status-grid,
 .split,
-.info-grid {
+.info-grid,
+.feature-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 22px;
+}
+
+.feature-grid {
+  grid-template-columns: 1fr;
 }
 
 .split {
@@ -390,9 +395,90 @@ h1 span {
 .search-box,
 .portal-panel,
 .admin-panel,
-.info-card {
+.info-card,
+.feature-card {
   background: rgba(53, 29, 34, 0.9);
   border: 1px solid var(--line);
+}
+
+.feature-card {
+  padding: 22px;
+}
+
+.feature-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.feature-head h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.feature-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.feature-card p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  line-height: 1.5;
+  font-weight: 750;
+}
+
+.command-table {
+  display: grid;
+  gap: 10px;
+}
+
+.command-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.7fr) minmax(180px, 0.9fr) 1fr;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.command-row strong,
+.command-row small,
+.command-row code,
+.command-row span {
+  min-width: 0;
+}
+
+.command-row strong {
+  display: block;
+  font-size: 15px;
+}
+
+.command-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.command-row code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: #22dcc7;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.command-row span {
+  color: var(--muted);
+  line-height: 1.4;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .info-card {
@@ -422,6 +508,14 @@ h1 span {
 
 .pink-line {
   border-top: 4px solid var(--pink);
+}
+
+.yellow-line {
+  border-top: 4px solid var(--yellow);
+}
+
+.orange-line {
+  border-top: 4px solid var(--orange);
 }
 
 .status-card {
@@ -720,6 +814,7 @@ h1 span {
   .split,
   .status-grid,
   .info-grid,
+  .command-row,
   .stat-band,
   .dashboard-grid,
   .guild-card {

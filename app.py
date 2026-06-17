@@ -10,6 +10,7 @@ import os
 import secrets
 import sqlite3
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -47,6 +48,65 @@ CONFIG = {
     "casino_server_count": os.getenv("CASINO_SERVER_COUNT", ""),
     "general_server_count": os.getenv("GENERAL_SERVER_COUNT", ""),
     "cookie_domain": os.getenv("COOKIE_DOMAIN", ""),
+}
+
+ARCHIVE_FEATURES = {
+    "source": "archive_bot",
+    "summary": "Legacy Discord self-bot source imported from archive-2026-02-12T215354+0100.",
+    "groups": [
+        {
+            "name": "Voice Manager",
+            "accent": "cyan",
+            "description": "Join/leave voice, auto-reconnect, mic/speaker control, and voice status.",
+            "commands": [
+                {"name": "$joinvoice", "aliases": "$jv, $join", "usage": "$jv [voice_channel_id]", "description": "Join a voice channel by ID or the channel you are in."},
+                {"name": "$leavevoice", "aliases": "$lv, $leave", "usage": "$lv [guild_or_channel_id]", "description": "Leave a specific voice connection or the current one."},
+                {"name": "$leaveall", "aliases": "$lvall", "usage": "$lvall", "description": "Disconnect from every voice channel."},
+                {"name": "$vcstatus", "aliases": "$vcs", "usage": "$vcs", "description": "Show voice channel, uptime, mic, speaker, reconnect, and latency."},
+                {"name": "$mic", "aliases": "$togglemic, $tm", "usage": "$mic [guild_id]", "description": "Toggle self mute."},
+                {"name": "$speaker", "aliases": "$togglespeaker, $ts", "usage": "$speaker [guild_id]", "description": "Toggle self deaf."},
+                {"name": "$setvoice", "aliases": "$sv", "usage": "$sv off on", "description": "Set mic and speaker state explicitly."},
+            ],
+        },
+        {
+            "name": "Spam Tools",
+            "accent": "red",
+            "description": "Repeat text or random lines from data/spam.txt with delay and stop controls.",
+            "commands": [
+                {"name": "$spam", "aliases": "", "usage": "$spam [channel_id] [delay] <message>", "description": "Send repeated text with random suffix."},
+                {"name": "$spamfile", "aliases": "", "usage": "$spamfile [channel_id] [delay]", "description": "Send random lines from archive_bot/data/spam.txt."},
+                {"name": "$stopspam", "aliases": "$ss", "usage": "$ss [channel_id]", "description": "Stop one spam task."},
+                {"name": "$stopallspam", "aliases": "$ssa", "usage": "$ssa", "description": "Stop all spam tasks."},
+            ],
+        },
+        {
+            "name": "Auto Quotes",
+            "accent": "pink",
+            "description": "Post rotating quote lines from data/quotes.txt to one channel.",
+            "commands": [
+                {"name": "$quotes", "aliases": "", "usage": "$quotes [channel_id] [delay]", "description": "Start automatic quote posting."},
+                {"name": "$stop_quotes", "aliases": "$sq", "usage": "$sq [channel_id]", "description": "Stop quote posting."},
+            ],
+        },
+        {
+            "name": "Monitoring",
+            "accent": "yellow",
+            "description": "Status dashboard for uptime, ping, voice sessions, spam tasks, and quote tasks.",
+            "commands": [
+                {"name": "$status", "aliases": "$st", "usage": "$status", "description": "Show bot runtime, voice, spam, and quote state."},
+            ],
+        },
+        {
+            "name": "Help & Reload",
+            "accent": "orange",
+            "description": "Command discovery and hot reload for cog files.",
+            "commands": [
+                {"name": "$help", "aliases": "$h, $menu", "usage": "$help [command_or_group]", "description": "Show all commands or details for one command/group."},
+                {"name": "$quickhelp", "aliases": "$qh", "usage": "$quickhelp", "description": "Show common commands."},
+                {"name": "$reload", "aliases": "$rl", "usage": "$reload [cog]", "description": "Reload one cog or every cog."},
+            ],
+        },
+    ],
 }
 
 SESSIONS: dict[str, dict] = {}
@@ -862,6 +922,7 @@ def public_summary() -> dict:
             "login_enabled": login_enabled(),
         },
         "status": status_summary(cash, bank, casino),
+        "archive_features": ARCHIVE_FEATURES,
         "cash": cash,
         "bank": bank,
         "casino": casino,
@@ -912,6 +973,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/summary":
             self.send_json(public_summary())
+            return
+        if parsed.path == "/api/archive/features":
+            self.send_json(ARCHIVE_FEATURES)
             return
         if parsed.path == "/api/search":
             params = parse_qs(parsed.query)
@@ -1440,13 +1504,28 @@ def search_user(query: str) -> list[dict]:
     )
 
 
-def run() -> None:
+def make_server() -> ThreadingHTTPServer:
     init_web_db()
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8088"))
-    server = ThreadingHTTPServer((host, port), Handler)
+    return ThreadingHTTPServer((host, port), Handler)
+
+
+def serve(server: ThreadingHTTPServer) -> None:
+    host, port = server.server_address
     print(f"{CONFIG['brand']} web listening on http://{host}:{port}")
     server.serve_forever()
+
+
+def start_background() -> ThreadingHTTPServer:
+    server = make_server()
+    thread = threading.Thread(target=serve, args=(server,), daemon=True)
+    thread.start()
+    return server
+
+
+def run() -> None:
+    serve(make_server())
 
 
 if __name__ == "__main__":

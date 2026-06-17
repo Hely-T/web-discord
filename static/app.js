@@ -75,6 +75,32 @@ function renderStatus(items) {
   `).join("");
 }
 
+function renderArchiveFeatures(features) {
+  const grid = byId("archiveFeatures");
+  if (!grid || !features || !features.groups) return;
+  grid.innerHTML = features.groups.map((group) => `
+    <article class="feature-card ${escapeHtml(group.accent || "")}-line">
+      <div class="feature-head">
+        <h3>${escapeHtml(group.name)}</h3>
+        <span>${escapeHtml(group.commands.length)} lệnh</span>
+      </div>
+      <p>${escapeHtml(group.description)}</p>
+      <div class="command-table">
+        ${group.commands.map((cmd) => `
+          <div class="command-row">
+            <div>
+              <strong>${escapeHtml(cmd.name)}</strong>
+              ${cmd.aliases ? `<small>${escapeHtml(cmd.aliases)}</small>` : ""}
+            </div>
+            <code>${escapeHtml(cmd.usage)}</code>
+            <span>${escapeHtml(cmd.description)}</span>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `).join("");
+}
+
 function renderRows(id, rows, options) {
   const node = byId(id);
   if (!node) return;
@@ -321,6 +347,7 @@ async function loadSummary() {
   setText("homeOwo", money(currentSummary.casino.owo_total, " OWO"));
   setText("homeTx", money(currentSummary.casino.transactions));
   renderStatus(currentSummary.status);
+  renderArchiveFeatures(currentSummary.archive_features);
 
   renderRows("cashTop", currentSummary.cash.top, {
     name: (row) => row.username || row.user_id,

@@ -8,6 +8,24 @@ Web public kiểu Jockie cho 2 bot Discord hiện có. Trang ngoài chỉ là he
 - Status: hiển thị bot đang operational hay không, số server, số user và uptime.
 - Admin panel riêng ở `/admin`, không dùng layout public; dùng để tạo/gia hạn/khóa key, xem user sử dụng key, ban/reset user, cấp quyền user/admin và xem yêu cầu nạp/thuê.
 - Dữ liệu bot đọc SQLite hiện có ở chế độ read-only.
+- Source archive cũ đã được ghép vào `archive_bot/`; `main.py` là file chính mới, chạy web dashboard và bot voice/RPC trong cùng process.
+
+## Source archive đã tích hợp
+
+Folder `archive_bot/` được nhập từ `/Users/hely-t/Downloads/archive-2026-02-12T215354+0100` và giữ nguyên các phần chính. Root `main.py` sẽ load cog từ folder này:
+
+- `main.py`: entrypoint chính mới, start web từ `app.py`, rồi chạy bot nếu có token.
+- `app.py`: module web Bleck Lous hiện tại, vẫn có thể chạy độc lập khi cần.
+- `archive_bot/main.py`: entrypoint Discord self-bot cũ, giữ để tham khảo.
+- `archive_bot/keep_alive.py`: Flask keep-alive mini server của source cũ.
+- `archive_bot/cogs/voice.py`: join/leave voice, auto-reconnect, mic/speaker, voice status.
+- `archive_bot/cogs/spam.py`: spam text, spam file, stop spam.
+- `archive_bot/cogs/quotes.py`: auto quotes từ file data.
+- `archive_bot/cogs/status.py`: dashboard trạng thái runtime của bot.
+- `archive_bot/cogs/help.py`: help menu, quickhelp.
+- `archive_bot/data/*.txt`: dữ liệu quotes/spam.
+
+File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment.
 
 ## Chạy local
 
@@ -18,6 +36,14 @@ python3 app.py
 ```
 
 Mở `http://localhost:8088`.
+
+File chính mới:
+
+```bash
+python3 main.py
+```
+
+Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, nó sẽ chạy thêm bot voice/RPC.
 
 Nếu chạy trên máy đang có source bot:
 
@@ -109,10 +135,16 @@ Environment=ADMIN_PASSWORD=change_this_password
 Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
+Environment=BOT_PREFIX=$
+Environment=DISCORD_TOKEN=your_discord_token
+Environment=RPC_ENABLED=false
+Environment=RPC_NAME=kinntobieedasick
+Environment=RPC_DETAILS=kinn.
+Environment=RPC_STATE=i miss her
 Environment=CASH_DB_PATH=/opt/discord-bots/main-bot/database/users.db
 Environment=BANK_DB_PATH=/opt/discord-bots/main-bot/database/bank_payments.db
 Environment=CASINO_DB_PATH=/opt/discord-bots/casino-bot/database/casino.db
-ExecStart=/usr/bin/python3 /opt/bleck-lous-web/app.py
+ExecStart=/usr/bin/python3 /opt/bleck-lous-web/main.py
 Restart=always
 RestartSec=3
 User=root
