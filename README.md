@@ -8,7 +8,7 @@ Web public kiểu Jockie cho 2 bot Discord hiện có. Trang ngoài chỉ là he
 - Status: hiển thị bot đang operational hay không, số server, số user và uptime.
 - Admin panel riêng ở `/admin`, không dùng layout public; dùng để tạo/gia hạn/khóa key, xem user sử dụng key, ban/reset user, cấp quyền user/admin và xem yêu cầu nạp/thuê.
 - Dữ liệu bot đọc SQLite hiện có ở chế độ read-only.
-- Source archive cũ đã được ghép vào `archive_bot/`; `main.py` là file chính mới, chạy web dashboard và bot voice/RPC trong cùng process.
+- Source archive cũ đã được ghép vào `archive_bot/`; `main.py` là file chính mới, chạy web dashboard và bot voice trong cùng process.
 
 ## Source archive đã tích hợp
 
@@ -25,7 +25,7 @@ Folder `archive_bot/` được nhập từ `/Users/hely-t/Downloads/archive-2026
 - `archive_bot/cogs/help.py`: help menu, quickhelp.
 - `archive_bot/data/*.txt`: dữ liệu quotes/spam.
 
-File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment.
+File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment. RPC là tuỳ chỉnh riêng của từng người, không cấu hình trong service/web chung.
 
 ## Chạy local
 
@@ -137,10 +137,6 @@ Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
 Environment=BOT_PREFIX=$
 Environment=DISCORD_TOKEN=your_discord_token
-Environment=RPC_ENABLED=false
-Environment=RPC_NAME=kinntobieedasick
-Environment=RPC_DETAILS=kinn.
-Environment=RPC_STATE=i miss her
 Environment=CASH_DB_PATH=/opt/discord-bots/main-bot/database/users.db
 Environment=BANK_DB_PATH=/opt/discord-bots/main-bot/database/bank_payments.db
 Environment=CASINO_DB_PATH=/opt/discord-bots/casino-bot/database/casino.db

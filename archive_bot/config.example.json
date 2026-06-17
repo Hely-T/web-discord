@@ -1,12 +1,6 @@
 {
   "prefix": "$",
   "token": "PUT_DISCORD_TOKEN_HERE",
-  "rpc": {
-    "enabled": false,
-    "name": "kinntobieedasick",
-    "details": "kinn.",
-    "state": "i miss her"
-  },
   "token_owo": [
     {
       "0": ""

@@ -56,21 +56,6 @@ def discord_intents():
     return intents
 
 
-def make_activity(config: dict):
-    rpc = config.get("rpc", {}) if isinstance(config.get("rpc"), dict) else {}
-    if str(os.getenv("RPC_ENABLED", rpc.get("enabled", "false"))).lower() not in {"1", "true", "yes", "on"}:
-        return None
-    name = os.getenv("RPC_NAME") or rpc.get("name") or config.get("activity_name")
-    if not name:
-        return None
-    details = os.getenv("RPC_DETAILS") or rpc.get("details", "")
-    state = os.getenv("RPC_STATE") or rpc.get("state", "")
-    try:
-        return discord.Activity(type=discord.ActivityType.playing, name=name, details=details, state=state)
-    except TypeError:
-        return discord.Game(name=name)
-
-
 class BleckLousBot(commands.Bot):
     def __init__(self, config: dict):
         self.config = config
@@ -92,18 +77,7 @@ class BleckLousBot(commands.Bot):
         print(f"Prefix: {self.command_prefix}")
         print("Web: running")
         print("=" * 34)
-        await self.apply_activity()
         await self.load_archive_cogs()
-
-    async def apply_activity(self):
-        activity = make_activity(self.config)
-        if not activity:
-            return
-        try:
-            await self.change_presence(activity=activity)
-            logger.info("RPC/activity enabled: %s", getattr(activity, "name", "activity"))
-        except Exception as exc:
-            logger.warning("Không set được RPC/activity: %s", exc)
 
     async def load_archive_cogs(self):
         if not COGS_DIR.exists():

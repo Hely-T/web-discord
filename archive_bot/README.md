@@ -12,6 +12,8 @@ This folder keeps the old Discord self-bot source beside the active Bleck Lous w
 - Monitoring: runtime status, ping, voice sessions, spam tasks, quote tasks.
 - Help/reload: command menu, quick help, cog reload.
 
+RPC/custom Discord profile activity is intentionally left out of the shared entrypoint. Each user can set up their own RPC separately.
+
 ## Running This Archive Source
 
 Create a real `config.json` from `config.example.json`, then run the unified app from the parent folder:
