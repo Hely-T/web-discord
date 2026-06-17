@@ -136,7 +136,10 @@ Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
 Environment=BOT_PREFIX=$
-Environment=DISCORD_TOKEN=your_discord_token
+# Optional. Leave empty/commented for web-only mode.
+# The imported archive uses discord.py-self, so Discord Developer Portal bot tokens
+# may be rejected by those voice/self-bot cogs.
+# Environment=DISCORD_TOKEN=your_discord_token
 Environment=CASH_DB_PATH=/opt/discord-bots/main-bot/database/users.db
 Environment=BANK_DB_PATH=/opt/discord-bots/main-bot/database/bank_payments.db
 Environment=CASINO_DB_PATH=/opt/discord-bots/casino-bot/database/casino.db

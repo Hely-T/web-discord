@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 
 import discord
@@ -138,6 +138,7 @@ def run_bot(config: dict) -> None:
         logger.warning("Không có DISCORD_TOKEN/BOT_TOKEN hoặc archive_bot/config.json. Chỉ chạy web.")
         web_app.run()
         return
+
     web_app.start_background()
     bot = BleckLousBot(config)
     register_reload_command(bot)
@@ -145,8 +146,15 @@ def run_bot(config: dict) -> None:
         bot.run(token, log_handler=None)
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
+        raise
     except Exception as exc:
-        logger.critical("Bot bị tắt đột ngột: %s", exc)
+        logger.critical(
+            "Bot bị tắt đột ngột: %s. Web vẫn tiếp tục chạy; kiểm tra DISCORD_TOKEN nếu muốn bật voice bot.",
+            exc,
+        )
+
+    logger.warning("Discord bot đã dừng, giữ web dashboard tiếp tục chạy.")
+    threading.Event().wait()
 
 
 def main() -> None:
