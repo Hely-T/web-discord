@@ -61,7 +61,6 @@ class BleckLousBot(commands.Bot):
         self.config = config
         kwargs = {
             "command_prefix": config.get("prefix", "$"),
-            "self_bot": True,
             "help_command": None,
             "case_insensitive": True,
         }

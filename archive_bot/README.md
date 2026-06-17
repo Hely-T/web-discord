@@ -2,7 +2,7 @@
 
 Imported from `/Users/hely-t/Downloads/archive-2026-02-12T215354+0100`.
 
-This folder keeps the old Discord self-bot source beside the active Bleck Lous web app. The live unified entrypoint is `../main.py`; `../app.py` is the web module. The archive code is exposed on the website Commands page through `ARCHIVE_FEATURES`.
+This folder keeps the imported Discord bot source beside the active Bleck Lous web app. The live unified entrypoint is `../main.py`; `../app.py` is the web module. The archive code is exposed on the website Commands page through `ARCHIVE_FEATURES`.
 
 ## Included Features
 
@@ -24,3 +24,5 @@ python3 main.py
 ```
 
 Do not commit real Discord tokens or webhook URLs.
+
+For the unified app, use a Bot token from Discord Developer Portal and enable Message Content Intent if you want prefix commands to work.

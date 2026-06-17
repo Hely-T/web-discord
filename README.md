@@ -16,7 +16,7 @@ Folder `archive_bot/` được nhập từ `/Users/hely-t/Downloads/archive-2026
 
 - `main.py`: entrypoint chính mới, start web từ `app.py`, rồi chạy bot nếu có token.
 - `app.py`: module web Bleck Lous hiện tại, vẫn có thể chạy độc lập khi cần.
-- `archive_bot/main.py`: entrypoint Discord self-bot cũ, giữ để tham khảo.
+- `archive_bot/main.py`: entrypoint Discord cũ, giữ để tham khảo.
 - `archive_bot/keep_alive.py`: Flask keep-alive mini server của source cũ.
 - `archive_bot/cogs/voice.py`: join/leave voice, auto-reconnect, mic/speaker, voice status.
 - `archive_bot/cogs/spam.py`: spam text, spam file, stop spam.
@@ -25,7 +25,7 @@ Folder `archive_bot/` được nhập từ `/Users/hely-t/Downloads/archive-2026
 - `archive_bot/cogs/help.py`: help menu, quickhelp.
 - `archive_bot/data/*.txt`: dữ liệu quotes/spam.
 
-File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment. RPC là tuỳ chỉnh riêng của từng người, không cấu hình trong service/web chung.
+File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment. `DISCORD_TOKEN` là Bot token từ Discord Developer Portal. RPC là tuỳ chỉnh riêng của từng người, không cấu hình trong service/web chung.
 
 ## Chạy local
 
@@ -43,7 +43,7 @@ File chính mới:
 python3 main.py
 ```
 
-Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, nó sẽ chạy thêm bot voice/RPC.
+Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, nó sẽ chạy thêm bot voice. RPC không chạy chung trong service này.
 
 Nếu chạy trên máy đang có source bot:
 
@@ -137,9 +137,8 @@ Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
 Environment=BOT_PREFIX=$
 # Optional. Leave empty/commented for web-only mode.
-# The imported archive uses discord.py-self, so Discord Developer Portal bot tokens
-# may be rejected by those voice/self-bot cogs.
-# Environment=DISCORD_TOKEN=your_discord_token
+# Use the Bot token from Discord Developer Portal to run the voice bot too.
+# Environment=DISCORD_TOKEN=your_bot_token
 Environment=CASH_DB_PATH=/opt/discord-bots/main-bot/database/users.db
 Environment=BANK_DB_PATH=/opt/discord-bots/main-bot/database/bank_payments.db
 Environment=CASINO_DB_PATH=/opt/discord-bots/casino-bot/database/casino.db
