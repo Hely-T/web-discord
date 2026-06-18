@@ -26,6 +26,20 @@ logger = logging.getLogger("BleckLousMain")
 logging.getLogger("discord").setLevel(logging.ERROR)
 
 
+class NormalDiscordReconnectFilter(logging.Filter):
+    """Hide only Discord's expected clean-close reconnect traceback."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name != "discord.client" or not record.getMessage().startswith("Attempting a reconnect in"):
+            return True
+        exc_info = record.exc_info
+        exc = exc_info[1] if isinstance(exc_info, tuple) else exc_info
+        return not isinstance(exc, discord.ConnectionClosed) or getattr(exc, "code", None) != 1000
+
+
+logging.getLogger("discord.client").addFilter(NormalDiscordReconnectFilter())
+
+
 def load_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -69,14 +83,22 @@ class BleckLousBot(commands.Bot):
             kwargs["intents"] = intents
         super().__init__(**kwargs)
 
-    async def on_ready(self):
-        print("=" * 34)
-        print(f"BOT ONLINE: {self.user.name}")
-        print(f"ID: {self.user.id}")
-        print(f"Prefix: {self.command_prefix}")
-        print("Web: running")
-        print("=" * 34)
+    async def setup_hook(self):
         await self.load_archive_cogs()
+
+    async def on_ready(self):
+        logger.info(
+            "BOT ONLINE: %s | ID: %s | Prefix: %s | Web: running",
+            self.user.name,
+            self.user.id,
+            self.command_prefix,
+        )
+
+    async def on_disconnect(self):
+        logger.warning("Discord gateway tạm ngắt kết nối; bot đang tự reconnect.")
+
+    async def on_resumed(self):
+        logger.info("Discord gateway đã reconnect thành công.")
 
     async def load_archive_cogs(self):
         if not COGS_DIR.exists():
