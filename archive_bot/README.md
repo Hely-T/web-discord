@@ -12,7 +12,7 @@ This folder keeps the imported Discord bot source beside the active Bleck Lous w
 - Monitoring: runtime status, ping, voice sessions, spam tasks, quote tasks.
 - Help/reload: command menu, quick help, cog reload.
 
-RPC/custom Discord profile activity is intentionally left out of the shared entrypoint. Each user can set up their own RPC separately.
+The authenticated web dashboard can update the shared bot presence and control voice rooms. Personal Discord Rich Presence remains separate for each user.
 
 ## Running This Archive Source
 

@@ -20,6 +20,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from bot_runtime import BotRuntimeError, runtime as bot_runtime
+
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -52,8 +54,17 @@ CONFIG = {
 
 ARCHIVE_FEATURES = {
     "source": "archive_bot",
-    "summary": "Legacy Discord self-bot source imported from archive-2026-02-12T215354+0100.",
+    "summary": "Discord bot source imported from archive-2026-02-12T215354+0100 and connected to the web dashboard.",
     "groups": [
+        {
+            "name": "Web Bot Control",
+            "accent": "cyan",
+            "description": "Control the live Discord bot from the authenticated dashboard.",
+            "commands": [
+                {"name": "Voice room", "aliases": "Web dashboard", "usage": "Dashboard > Treo Voice", "description": "Choose an authorized server and voice room, then join, move, or leave."},
+                {"name": "Bot Presence", "aliases": "Admin only", "usage": "Dashboard > Presence / RPC", "description": "Set the bot activity type, text, details, state, stream URL, and status."},
+            ],
+        },
         {
             "name": "Voice Manager",
             "accent": "cyan",
@@ -432,9 +443,13 @@ def claims_for_user(discord_user_id: str) -> dict:
     with web_db() as conn:
         rows = conn.execute(
             """
-            SELECT key, guild_id, guild_name, claimed_at
-            FROM license_claims
-            WHERE discord_user_id = ?
+            SELECT c.key, c.guild_id, c.guild_name, c.claimed_at,
+                   k.status, k.expires_at
+            FROM license_claims c
+            JOIN license_keys k ON k.key = c.key
+            WHERE c.discord_user_id = ?
+              AND k.status = 'active'
+              AND (k.expires_at IS NULL OR datetime(k.expires_at) >= datetime('now'))
             """,
             (discord_user_id,),
         ).fetchall()
@@ -977,6 +992,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/archive/features":
             self.send_json(ARCHIVE_FEATURES)
             return
+        if parsed.path == "/api/bot/control":
+            self.handle_bot_control()
+            return
         if parsed.path == "/api/search":
             params = parse_qs(parsed.query)
             query = params.get("q", [""])[0].strip()
@@ -1014,6 +1032,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/rent/request":
             self.handle_rent_request()
+            return
+        if parsed.path == "/api/bot/voice":
+            self.handle_bot_voice()
+            return
+        if parsed.path == "/api/bot/presence":
+            self.handle_bot_presence()
             return
         if parsed.path == "/api/admin/login":
             self.handle_admin_login()
@@ -1156,6 +1180,98 @@ class Handler(BaseHTTPRequestHandler):
             "casino_invite": invite_url(CONFIG["casino_client_id"]),
             "general_invite": "",
         }
+
+    def bot_access(self) -> tuple[dict | None, dict, dict[str, dict]]:
+        session = self.current_session()
+        if not session:
+            return None, {}, {}
+        user_id = str(session["user"].get("id", ""))
+        user_state = web_user_status(user_id)
+        if user_state.get("status") == "banned":
+            return None, user_state, {}
+        claims = claims_for_user(user_id)
+        is_admin = user_state.get("role") == "admin"
+        allowed = {
+            str(guild["id"]): guild
+            for guild in session["guilds"]
+            if is_admin or str(guild["id"]) in claims
+        }
+        return session, user_state, allowed
+
+    def handle_bot_control(self) -> None:
+        session, user_state, allowed = self.bot_access()
+        if not session:
+            self.send_json({"ok": False, "message": "Bạn cần login Discord và tài khoản phải đang hoạt động."})
+            return
+        try:
+            snapshot = bot_runtime.snapshot(allowed.keys())
+        except BotRuntimeError as exc:
+            self.send_json({"ok": False, "message": str(exc), "online": False})
+            return
+        runtime_guilds = {str(item["id"]): item for item in snapshot.get("guilds", [])}
+        bot_client_id = str(snapshot.get("user", {}).get("id", ""))
+        snapshot["guilds"] = [
+            {
+                **runtime_guilds.get(
+                    guild_id,
+                    {
+                        "id": guild_id,
+                        "name": str(guild.get("name", "Unknown Server")),
+                        "channels": [],
+                        "voice_channel_id": "",
+                    },
+                ),
+                "bot_present": guild_id in runtime_guilds,
+                "invite_url": invite_url(bot_client_id, guild_id),
+            }
+            for guild_id, guild in allowed.items()
+        ]
+        self.send_json(
+            {
+                "ok": True,
+                **snapshot,
+                "can_manage_presence": user_state.get("role") == "admin",
+            }
+        )
+
+    def handle_bot_voice(self) -> None:
+        session, _, allowed = self.bot_access()
+        if not session:
+            self.send_json({"ok": False, "message": "Bạn cần login Discord và tài khoản phải đang hoạt động."})
+            return
+        body = json_body(self)
+        guild_id = str(body.get("guild_id", "")).strip()
+        if guild_id not in allowed:
+            self.send_json({"ok": False, "message": "Server chưa có key hiệu lực hoặc bạn không có quyền quản lý."})
+            return
+        action = str(body.get("action", "join")).strip().lower()
+        try:
+            if action == "join":
+                result = bot_runtime.join_voice(guild_id, str(body.get("channel_id", "")).strip())
+            elif action == "leave":
+                result = bot_runtime.leave_voice(guild_id)
+            else:
+                self.send_json({"ok": False, "message": "Thao tác voice không hợp lệ."})
+                return
+        except BotRuntimeError as exc:
+            self.send_json({"ok": False, "message": str(exc)})
+            return
+        self.send_json(result)
+
+    def handle_bot_presence(self) -> None:
+        session, user_state, _ = self.bot_access()
+        if not session:
+            self.send_json({"ok": False, "message": "Bạn cần login Discord."})
+            return
+        if user_state.get("role") != "admin":
+            self.send_json({"ok": False, "message": "Chỉ admin được đổi presence/RPC chung của bot."})
+            return
+        try:
+            result = bot_runtime.set_presence(json_body(self))
+        except BotRuntimeError as exc:
+            self.send_json({"ok": False, "message": str(exc)})
+            return
+        self.send_json(result)
 
     def handle_claim_key(self) -> None:
         session = self.current_session()

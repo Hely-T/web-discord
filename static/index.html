@@ -154,6 +154,58 @@
                 </div>
               </div>
             </div>
+            <div class="bot-control hidden" id="botControl">
+              <div class="bot-control-head">
+                <div>
+                  <span class="runtime-dot" id="botRuntimeDot"></span>
+                  <strong id="botRuntimeName">Discord bot</strong>
+                  <span id="botRuntimeMeta">Đang kết nối...</span>
+                </div>
+                <button class="icon-button" id="botControlRefresh" type="button" title="Làm mới trạng thái" aria-label="Làm mới trạng thái">↻</button>
+              </div>
+              <div class="bot-control-grid">
+                <form class="control-form" id="voiceControlForm">
+                  <h3>Treo Voice</h3>
+                  <label for="botGuild">Server</label>
+                  <select id="botGuild"></select>
+                  <label for="botVoiceChannel">Phòng voice</label>
+                  <select id="botVoiceChannel"></select>
+                  <div class="bot-guild-access" id="botGuildAccess"></div>
+                  <div class="control-actions">
+                    <button class="cyan" id="botJoinVoice" type="button">TREO ROOM</button>
+                    <button id="botLeaveVoice" type="button">RỜI ROOM</button>
+                  </div>
+                </form>
+                <form class="control-form hidden" id="presenceForm">
+                  <h3>Bot Presence / RPC</h3>
+                  <div class="control-pair">
+                    <select id="presenceType" aria-label="Loại hoạt động">
+                      <option value="playing">Playing</option>
+                      <option value="listening">Listening</option>
+                      <option value="watching">Watching</option>
+                      <option value="streaming">Streaming</option>
+                      <option value="competing">Competing</option>
+                      <option value="none">Tắt activity</option>
+                    </select>
+                    <select id="presenceStatus" aria-label="Trạng thái bot">
+                      <option value="online">Online</option>
+                      <option value="idle">Idle</option>
+                      <option value="dnd">Do not disturb</option>
+                      <option value="invisible">Invisible</option>
+                    </select>
+                  </div>
+                  <input id="presenceName" maxlength="128" placeholder="Tên hoạt động" />
+                  <div class="control-pair">
+                    <input id="presenceDetails" maxlength="128" placeholder="Details" />
+                    <input id="presenceState" maxlength="128" placeholder="State" />
+                  </div>
+                  <input id="presenceUrl" maxlength="500" placeholder="Streaming URL" />
+                  <button class="pink" type="submit">CẬP NHẬT PRESENCE</button>
+                </form>
+              </div>
+              <div class="bot-runtime-message" id="botRuntimeMessage"></div>
+              <div class="voice-connections" id="voiceConnections"></div>
+            </div>
           </section>
 
           <section class="detail-panel hidden" id="support">
@@ -185,6 +237,6 @@
         </section>
       </main>
     </div>
-    <script src="/app.js?v=20260616-login-gate"></script>
+    <script src="/app.js?v=20260618-bot-control"></script>
   </body>
 </html>

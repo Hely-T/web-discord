@@ -9,6 +9,7 @@ Web public kiểu Jockie cho 2 bot Discord hiện có. Trang ngoài chỉ là he
 - Admin panel riêng ở `/admin`, không dùng layout public; dùng để tạo/gia hạn/khóa key, xem user sử dụng key, ban/reset user, cấp quyền user/admin và xem yêu cầu nạp/thuê.
 - Dữ liệu bot đọc SQLite hiện có ở chế độ read-only.
 - Source archive cũ đã được ghép vào `archive_bot/`; `main.py` là file chính mới, chạy web dashboard và bot voice trong cùng process.
+- Dashboard đã có Bot Control để chọn phòng voice, treo/rời room và đổi Presence/RPC của bot.
 
 ## Source archive đã tích hợp
 
@@ -16,6 +17,7 @@ Folder `archive_bot/` được nhập từ `/Users/hely-t/Downloads/archive-2026
 
 - `main.py`: entrypoint chính mới, start web từ `app.py`, rồi chạy bot nếu có token.
 - `app.py`: module web Bleck Lous hiện tại, vẫn có thể chạy độc lập khi cần.
+- `bot_runtime.py`: bridge thread-safe để web đọc trạng thái và điều khiển bot Discord đang chạy.
 - `archive_bot/main.py`: entrypoint Discord cũ, giữ để tham khảo.
 - `archive_bot/keep_alive.py`: Flask keep-alive mini server của source cũ.
 - `archive_bot/cogs/voice.py`: join/leave voice, auto-reconnect, mic/speaker, voice status.
@@ -25,7 +27,17 @@ Folder `archive_bot/` được nhập từ `/Users/hely-t/Downloads/archive-2026
 - `archive_bot/cogs/help.py`: help menu, quickhelp.
 - `archive_bot/data/*.txt`: dữ liệu quotes/spam.
 
-File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment. `DISCORD_TOKEN` là Bot token từ Discord Developer Portal. RPC là tuỳ chỉnh riêng của từng người, không cấu hình trong service/web chung.
+File `config.json` thật trong archive có token nên không được copy vào repo. Dùng `archive_bot/config.example.json` để tạo `archive_bot/config.json`, hoặc set `DISCORD_TOKEN`/`BOT_TOKEN` bằng systemd environment. `DISCORD_TOKEN` là Bot token từ Discord Developer Portal. Web điều khiển presence chung của bot; RPC cá nhân vẫn do từng người tự chạy riêng.
+
+## Điều khiển bot trên web
+
+Sau khi login Discord, vào `Dashboard`:
+
+- User có key còn hiệu lực được chọn server/phòng voice và treo hoặc rời room.
+- User chỉ thấy server mình có quyền quản lý và đã kích hoạt key; admin web thấy các server mình quản lý.
+- Role `admin` được đổi activity type, status, name, details, state và streaming URL của bot.
+- Presence này là trạng thái của bot Discord dùng chung. Rich Presence cá nhân với application assets/image vẫn phải chạy riêng trên máy của từng người.
+- Web không nhận và không lưu user token Discord.
 
 ## Chạy local
 
@@ -43,7 +55,7 @@ File chính mới:
 python3 main.py
 ```
 
-Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, nó sẽ chạy thêm bot voice. RPC không chạy chung trong service này.
+Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, nó sẽ chạy thêm bot voice và cho phép web đổi presence của bot. RPC cá nhân không chạy chung trong service này.
 
 Nếu chạy trên máy đang có source bot:
 

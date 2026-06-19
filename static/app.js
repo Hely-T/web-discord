@@ -1,6 +1,7 @@
 const fmt = new Intl.NumberFormat("vi-VN");
 let currentSummary = null;
 let currentMe = null;
+let currentBotControl = null;
 
 function money(value, suffix = "") {
   return `${fmt.format(Number(value || 0))}${suffix}`;
@@ -209,6 +210,130 @@ function renderPortal(me, summary) {
   `;
 }
 
+function renderVoiceChannels() {
+  const guildSelect = byId("botGuild");
+  const channelSelect = byId("botVoiceChannel");
+  const guildAccess = byId("botGuildAccess");
+  const joinButton = byId("botJoinVoice");
+  const guild = (currentBotControl?.guilds || []).find((item) => item.id === guildSelect.value);
+  const previous = channelSelect.value;
+  if (!guild || guild.channels.length === 0) {
+    channelSelect.innerHTML = `<option value="">Không có phòng voice khả dụng</option>`;
+    joinButton.disabled = true;
+    guildAccess.innerHTML = guild && !guild.bot_present && guild.invite_url
+      ? `<a class="tiny-button cyan" href="${escapeHtml(guild.invite_url)}">INVITE VOICE BOT</a>`
+      : `<span>${guild ? "Bot không thấy phòng có quyền Connect." : "Chưa có server khả dụng."}</span>`;
+    return;
+  }
+  joinButton.disabled = false;
+  guildAccess.innerHTML = "";
+  channelSelect.innerHTML = guild.channels.map((channel) => (
+    `<option value="${escapeHtml(channel.id)}">${escapeHtml(channel.name)} (${channel.members})</option>`
+  )).join("");
+  if (guild.channels.some((channel) => channel.id === previous)) {
+    channelSelect.value = previous;
+  } else if (guild.voice_channel_id) {
+    channelSelect.value = guild.voice_channel_id;
+  }
+}
+
+function renderBotControl(data) {
+  const panel = byId("botControl");
+  panel.classList.remove("hidden");
+  currentBotControl = data;
+  byId("botRuntimeDot").classList.toggle("online", Boolean(data.online));
+  setText("botRuntimeName", data.user?.name || "Discord bot");
+  setText("botRuntimeMeta", data.online ? `${data.latency_ms}ms · ${data.guilds.length} server khả dụng` : "Offline");
+
+  const guildSelect = byId("botGuild");
+  const previousGuild = guildSelect.value;
+  guildSelect.innerHTML = data.guilds.length
+    ? data.guilds.map((guild) => `<option value="${escapeHtml(guild.id)}">${escapeHtml(guild.name)}</option>`).join("")
+    : `<option value="">Không có server đã kích hoạt</option>`;
+  if (data.guilds.some((guild) => guild.id === previousGuild)) guildSelect.value = previousGuild;
+  renderVoiceChannels();
+
+  const connections = byId("voiceConnections");
+  connections.innerHTML = data.connections.length
+    ? data.connections.map((item) => `
+      <div class="voice-connection">
+        <span class="runtime-dot online"></span>
+        <div>
+          <strong>${escapeHtml(item.channel_name)}</strong>
+          <small>${escapeHtml(item.guild_name)} · ${item.latency_ms}ms</small>
+        </div>
+      </div>
+    `).join("")
+    : `<div class="empty compact-empty">Bot chưa treo voice.</div>`;
+
+  const presenceForm = byId("presenceForm");
+  presenceForm.classList.toggle("hidden", !data.can_manage_presence);
+  if (data.can_manage_presence) {
+    byId("presenceType").value = data.presence?.type || "playing";
+    byId("presenceStatus").value = data.presence?.status || "online";
+    byId("presenceName").value = data.presence?.name || "";
+    byId("presenceDetails").value = data.presence?.details || "";
+    byId("presenceState").value = data.presence?.state || "";
+    byId("presenceUrl").value = data.presence?.url || "";
+  }
+}
+
+async function loadBotControl() {
+  const panel = byId("botControl");
+  if (!currentMe?.logged_in) {
+    panel.classList.add("hidden");
+    return;
+  }
+  const response = await fetch("/api/bot/control", { cache: "no-store" });
+  const data = await response.json();
+  if (!data.ok) {
+    panel.classList.remove("hidden");
+    setText("botRuntimeMeta", "Offline");
+    setText("botRuntimeMessage", data.message || "Không tải được bot runtime.");
+    return;
+  }
+  setText("botRuntimeMessage", "");
+  renderBotControl(data);
+}
+
+async function controlVoice(action) {
+  const guildId = byId("botGuild").value;
+  const channelId = byId("botVoiceChannel").value;
+  if (!guildId || (action === "join" && !channelId)) {
+    setText("botRuntimeMessage", "Hãy chọn server và phòng voice.");
+    return;
+  }
+  setText("botRuntimeMessage", action === "join" ? "Đang kết nối voice..." : "Đang rời voice...");
+  const response = await fetch("/api/bot/voice", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, guild_id: guildId, channel_id: channelId }),
+  });
+  const data = await response.json();
+  setText("botRuntimeMessage", data.message || "Đã xử lý.");
+  if (data.ok) await loadBotControl();
+}
+
+async function updatePresence(event) {
+  event.preventDefault();
+  setText("botRuntimeMessage", "Đang cập nhật presence...");
+  const response = await fetch("/api/bot/presence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: byId("presenceType").value,
+      status: byId("presenceStatus").value,
+      name: byId("presenceName").value,
+      details: byId("presenceDetails").value,
+      state: byId("presenceState").value,
+      url: byId("presenceUrl").value,
+    }),
+  });
+  const data = await response.json();
+  setText("botRuntimeMessage", data.message || "Đã xử lý.");
+  if (data.ok) await loadBotControl();
+}
+
 function renderRentGuilds(guilds) {
   const select = byId("rentGuild");
   if (!guilds || guilds.length === 0) {
@@ -253,6 +378,7 @@ async function loadMe(summary) {
     casinoInvite.removeAttribute("data-view");
   }
   renderPortal(currentMe, summary);
+  await loadBotControl();
 }
 
 async function claimKey(guildId) {
@@ -408,6 +534,11 @@ byId("homeKeyForm").addEventListener("submit", checkHomeKey);
 byId("searchForm").addEventListener("submit", searchUser);
 byId("topupForm").addEventListener("submit", submitTopup);
 byId("rentForm").addEventListener("submit", submitRent);
+byId("botGuild").addEventListener("change", renderVoiceChannels);
+byId("botJoinVoice").addEventListener("click", () => controlVoice("join"));
+byId("botLeaveVoice").addEventListener("click", () => controlVoice("leave"));
+byId("botControlRefresh").addEventListener("click", loadBotControl);
+byId("presenceForm").addEventListener("submit", updatePresence);
 byId("portalPanel").addEventListener("click", (event) => {
   const target = event.target;
   if (target instanceof HTMLElement && target.dataset.claim) {

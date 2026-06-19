@@ -644,7 +644,8 @@ h1 span {
 }
 
 .portal-panel,
-.admin-panel {
+.admin-panel,
+.bot-control {
   padding: 16px;
 }
 
@@ -656,6 +657,194 @@ h1 span {
 
 .dashboard-action {
   align-self: start;
+}
+
+.bot-control {
+  margin-top: 22px;
+  background: rgba(34, 25, 27, 0.96);
+  border: 1px solid var(--line);
+}
+
+.bot-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 4px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bot-control-head > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bot-control-head strong,
+.bot-control-head span {
+  min-width: 0;
+}
+
+.bot-control-head > div > span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.runtime-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #666;
+}
+
+.runtime-dot.online {
+  background: #2ee59d;
+  box-shadow: 0 0 0 5px rgba(46, 229, 157, 0.1);
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.bot-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 22px;
+  padding: 18px 0;
+}
+
+.control-form {
+  display: grid;
+  align-content: start;
+  gap: 11px;
+  min-width: 0;
+}
+
+.control-form + .control-form {
+  padding-left: 22px;
+  border-left: 1px solid var(--line);
+}
+
+.control-form h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.control-form label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.control-form input,
+.control-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 13px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.24);
+  outline: 0;
+}
+
+.control-pair,
+.control-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.control-form button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 6px;
+  color: white;
+  background: var(--red);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.control-form button.cyan {
+  background: var(--cyan);
+}
+
+.control-form button.pink {
+  background: var(--pink);
+}
+
+.control-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.bot-guild-access {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.bot-guild-access:empty {
+  display: none;
+}
+
+.bot-runtime-message {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.voice-connections {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.voice-connection {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.voice-connection strong,
+.voice-connection small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-connection small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.compact-empty {
+  min-height: 58px;
+  padding: 18px;
 }
 
 .account-strip {
@@ -817,8 +1006,22 @@ h1 span {
   .command-row,
   .stat-band,
   .dashboard-grid,
+  .bot-control-grid,
+  .voice-connections,
   .guild-card {
     grid-template-columns: 1fr;
+  }
+
+  .control-form + .control-form {
+    padding-top: 18px;
+    padding-left: 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .bot-control-head > div {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .guild-actions {
@@ -865,5 +1068,12 @@ h1 span {
   .section-title {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .control-pair,
+  .control-actions {
+    grid-template-columns: 1fr;
   }
 }

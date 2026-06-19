@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -11,6 +12,7 @@ import discord
 from discord.ext import commands
 
 import app as web_app
+from bot_runtime import runtime as bot_runtime
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -84,7 +86,12 @@ class BleckLousBot(commands.Bot):
         super().__init__(**kwargs)
 
     async def setup_hook(self):
+        bot_runtime.attach(self, asyncio.get_running_loop())
         await self.load_archive_cogs()
+
+    async def close(self):
+        bot_runtime.detach(self)
+        await super().close()
 
     async def on_ready(self):
         logger.info(
