@@ -3,240 +3,151 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bleck Lous Dashboard</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <meta name="color-scheme" content="dark" />
+    <title>Bleck Lous Voice Station</title>
+    <link rel="stylesheet" href="/styles.css?v=20260620-voice-station" />
   </head>
   <body>
-    <div class="page-shell">
-      <header class="site-header">
-        <a class="brand" href="#" data-view="home">
-          <span>Bleck Lous</span>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="/" aria-label="Bleck Lous Voice Station">
+          <span class="brand-mark">BL</span>
+          <span><strong>Bleck Lous</strong><small>Voice Station</small></span>
         </a>
-        <nav class="nav">
-          <a href="#faq" data-view="faq">FAQ</a>
-          <a href="#commands" data-view="commands">COMMANDS</a>
-          <a href="#status" data-view="status">STATUS</a>
-          <a href="#dashboard" data-view="dashboard">DASHBOARD</a>
-          <a href="#support" data-view="support">SUPPORT</a>
-          <a id="loginLink" class="login-pill" href="/auth/login?next=dashboard">LOGIN</a>
+        <nav aria-label="Điều hướng">
+          <button class="nav-item active" type="button" data-section="voice">
+            <span class="nav-icon">V</span><span>Voice rooms</span>
+          </button>
+          <button class="nav-item" type="button" data-section="presence">
+            <span class="nav-icon">R</span><span>RPC presence</span>
+          </button>
+          <button class="nav-item" type="button" data-section="access">
+            <span class="nav-icon">K</span><span>Quyền truy cập</span>
+          </button>
         </nav>
-      </header>
+        <div class="sidebar-foot">
+          <a href="/admin">Admin</a>
+          <span id="domain">nasdaq-fx.com</span>
+        </div>
+      </aside>
 
-      <main>
-        <section class="hero">
-          <div class="hero-art" aria-hidden="true">
-            <div class="coin coin-one">$</div>
-            <div class="coin coin-two">7</div>
-            <div class="coin coin-three">♠</div>
-            <div class="console">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
+      <main class="main-shell">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">VOICE CONTROL</p>
+            <h1 id="pageTitle">Treo phòng voice</h1>
           </div>
-          <div class="hero-copy">
-            <h1>BLECK LOUS<br /><span>1 IN 2 DISCORD BOT</span></h1>
-            <div class="hero-actions invite-row">
-              <a class="invite-button red" id="casinoInvite" href="#dashboard" data-view="dashboard">
-                <span class="invite-icon">BL</span>
-                <strong>INVITE CASINO</strong>
-              </a>
-              <form class="hero-key-form" id="homeKeyForm">
-                <input id="homeKeyInput" autocomplete="off" placeholder="Nhập key bot tổng" />
-                <button class="invite-button cyan" type="submit">
-                  <span class="invite-icon">KEY</span>
-                  <strong>INVITE BOT TỔNG</strong>
-                </button>
+          <div class="topbar-actions">
+            <div class="runtime-badge offline" id="runtimeBadge">
+              <span></span><strong id="runtimeText">Đang kiểm tra bot</strong>
+            </div>
+            <a class="account-button" id="accountButton" href="/auth/login?next=control">Đăng nhập Discord</a>
+          </div>
+        </header>
+
+        <div class="notice hidden" id="notice" role="status"></div>
+
+        <section class="login-gate" id="loginGate">
+          <div class="login-copy">
+            <span class="status-chip">DISCORD OAUTH2</span>
+            <h2>Đăng nhập để điều khiển bot voice</h2>
+            <p>Discord chỉ cấp thông tin tài khoản và danh sách server bạn quản lý. Web không yêu cầu token tài khoản cá nhân.</p>
+            <a class="primary-button" id="loginButton" href="/auth/login?next=control">Tiếp tục với Discord</a>
+          </div>
+          <div class="login-checks" aria-label="Trạng thái đăng nhập">
+            <div><span>1</span><strong>Xác thực Discord</strong><small>OAuth2 identify + guilds</small></div>
+            <div><span>2</span><strong>Chọn server</strong><small>Server có key hiệu lực</small></div>
+            <div><span>3</span><strong>Ghim room</strong><small>Tự nối lại khi mất voice</small></div>
+          </div>
+        </section>
+
+        <div class="workspace hidden" id="workspace">
+          <section class="view active" id="voiceView" data-view="voice">
+            <div class="metrics-grid">
+              <article><span>Bot</span><strong id="botName">Discord bot</strong><small id="botLatency">Chưa kết nối</small></article>
+              <article><span>Server được cấp</span><strong id="guildCount">0</strong><small>Có thể điều khiển</small></article>
+              <article><span>Room đang treo</span><strong id="connectionCount">0</strong><small>Persistent voice</small></article>
+            </div>
+
+            <div class="content-grid">
+              <section class="panel voice-panel">
+                <div class="panel-head">
+                  <div><p>ROOM CONTROL</p><h2>Chọn nơi bot sẽ ở lại</h2></div>
+                  <button class="icon-button" id="refreshButton" type="button" title="Làm mới" aria-label="Làm mới">↻</button>
+                </div>
+                <form id="voiceForm">
+                  <label>Server
+                    <select id="guildSelect" required></select>
+                  </label>
+                  <label>Phòng voice
+                    <select id="channelSelect" required></select>
+                  </label>
+                  <div class="form-actions">
+                    <button class="primary-button" id="joinButton" type="submit">Treo room</button>
+                    <button class="secondary-button" id="leaveButton" type="button">Rời room</button>
+                  </div>
+                </form>
+                <div class="bot-missing hidden" id="botMissing">
+                  <div><strong>Bot chưa có trong server</strong><p>Thêm bot rồi làm mới danh sách phòng.</p></div>
+                  <a class="secondary-button" id="inviteButton" href="#" target="_blank" rel="noreferrer">Thêm bot</a>
+                </div>
+              </section>
+
+              <section class="panel sessions-panel">
+                <div class="panel-head">
+                  <div><p>LIVE SESSIONS</p><h2>Kết nối hiện tại</h2></div>
+                  <span class="pulse-label"><i></i> Auto reconnect</span>
+                </div>
+                <div class="session-list" id="sessionList"></div>
+              </section>
+            </div>
+          </section>
+
+          <section class="view" id="presenceView" data-view="presence">
+            <section class="panel presence-panel">
+              <div class="panel-head">
+                <div><p>BOT PRESENCE</p><h2>RPC và trạng thái Discord</h2></div>
+                <span class="permission-label" id="presencePermission">Admin only</span>
+              </div>
+              <form class="presence-form" id="presenceForm">
+                <label>Loại hoạt động
+                  <select id="presenceType">
+                    <option value="playing">Playing</option>
+                    <option value="listening">Listening</option>
+                    <option value="watching">Watching</option>
+                    <option value="competing">Competing</option>
+                    <option value="streaming">Streaming</option>
+                    <option value="none">Không hiển thị</option>
+                  </select>
+                </label>
+                <label>Trạng thái
+                  <select id="presenceStatus">
+                    <option value="online">Online</option>
+                    <option value="idle">Idle</option>
+                    <option value="dnd">Do not disturb</option>
+                    <option value="invisible">Invisible</option>
+                  </select>
+                </label>
+                <label class="wide">Tên hoạt động<input id="presenceName" maxlength="128" placeholder="Đang treo voice" /></label>
+                <label>Details<input id="presenceDetails" maxlength="128" placeholder="Bleck Lous" /></label>
+                <label>State<input id="presenceState" maxlength="128" placeholder="nasdaq-fx.com" /></label>
+                <label class="wide">Stream URL<input id="presenceUrl" type="url" placeholder="https://twitch.tv/..." /></label>
+                <button class="primary-button wide" type="submit">Cập nhật RPC</button>
               </form>
-            </div>
-            <p class="hero-note" id="homeKeyMessage">Bot casino public. Bot tổng cần key thuê trước khi invite.</p>
-          </div>
-        </section>
-
-        <section class="home-overview">
-          <div class="stat-band">
-            <div>
-              <span>Bot tổng users</span>
-              <strong id="homeUsers">0</strong>
-            </div>
-            <div>
-              <span>Tổng cash</span>
-              <strong id="homeCash">0 VNĐ</strong>
-            </div>
-            <div>
-              <span>Casino OWO</span>
-              <strong id="homeOwo">0 OWO</strong>
-            </div>
-            <div>
-              <span>Giao dịch</span>
-              <strong id="homeTx">0</strong>
-            </div>
-          </div>
-          <div class="split">
-            <div>
-              <div class="section-title compact">
-                <h2>Top Cash</h2>
-                <span>Bot tổng</span>
-              </div>
-              <div class="rank-list" id="cashTop"></div>
-            </div>
-            <div>
-              <div class="section-title compact">
-                <h2>Top Casino</h2>
-                <span>OWO balance</span>
-              </div>
-              <div class="rank-list" id="casinoTop"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="detail-area hidden" id="detailArea">
-          <section class="detail-panel hidden" id="faq">
-            <div class="section-title">
-              <h2>FAQ</h2>
-              <span id="domain">nadnasdaq-fx.com</span>
-            </div>
-            <div class="info-grid">
-              <article class="info-card">
-                <h3>Bot Bleck Lous.</h3>
-                <p>Bot quản lý server. Bot tổng cần thuê để quản lý server, quản lý booking và donate cho server. Login Discord, chọn server, nhập key rồi invite bot.</p>
-              </article>
-              <article class="info-card">
-                <h3>Bot Casino Public</h3>
-                <p>Bot casino có thể invite trực tiếp vào server có các game hiện nay nhưng không dùng tiền thật, chỉ chơi vui với nhau bằng tiền OwO. Liên hệ Server Support để quy đổi.</p>
-              </article>
-              <article class="info-card">
-                <h3>Mỗi server có database riêng?</h3>
-                <p>Web quản lý key theo từng server. Dữ liệu bot vẫn nằm trong database của bot trên VPS.</p>
-              </article>
-            </div>
+            </section>
           </section>
 
-          <section class="detail-panel hidden" id="commands">
-            <div class="section-title">
-              <h2>Commands</h2>
-              <span>Source archive_bot đã tích hợp</span>
-            </div>
-            <div class="feature-grid" id="archiveFeatures"></div>
+          <section class="view" id="accessView" data-view="access">
+            <section class="panel access-panel">
+              <div class="panel-head">
+                <div><p>SERVER ACCESS</p><h2>Key và server của bạn</h2></div>
+              </div>
+              <div class="access-list" id="accessList"></div>
+            </section>
           </section>
-
-          <section class="detail-panel hidden" id="status">
-            <div class="section-title">
-              <h2>Bot Status</h2>
-              <span id="updated">Đang tải...</span>
-            </div>
-            <div class="status-grid" id="statusGrid"></div>
-          </section>
-
-          <section class="detail-panel hidden" id="dashboard">
-            <div class="section-title">
-              <h2>Dashboard</h2>
-              <span id="dashboardSubtitle">Login Discord để nạp tiền, thuê key và invite bot tổng</span>
-            </div>
-            <div class="dashboard-grid">
-              <div class="portal-panel" id="portalPanel"></div>
-              <div class="admin-panel dashboard-action hidden" id="dashboardActions">
-                <form class="dashboard-form" id="topupForm">
-                  <h3>Nạp tiền thủ công</h3>
-                  <input id="topupAmount" type="number" min="1000" step="1000" placeholder="Số tiền VNĐ" />
-                  <input id="topupNote" placeholder="Ghi chú chuyển khoản / Discord" />
-                  <button type="submit">GỬI YÊU CẦU NẠP</button>
-                </form>
-                <form class="dashboard-form" id="rentForm">
-                  <h3>Thuê key bot tổng</h3>
-                  <select id="rentGuild"></select>
-                  <input id="rentMonths" type="number" min="1" max="24" value="1" />
-                  <input id="rentNote" placeholder="Gói thuê / ghi chú cho admin" />
-                  <button type="submit">GỬI YÊU CẦU THUÊ</button>
-                </form>
-                <div class="rank-list compact-list" id="requestList">
-                  <div class="empty">Chưa có yêu cầu nào.</div>
-                </div>
-              </div>
-            </div>
-            <div class="bot-control hidden" id="botControl">
-              <div class="bot-control-head">
-                <div>
-                  <span class="runtime-dot" id="botRuntimeDot"></span>
-                  <strong id="botRuntimeName">Discord bot</strong>
-                  <span id="botRuntimeMeta">Đang kết nối...</span>
-                </div>
-                <button class="icon-button" id="botControlRefresh" type="button" title="Làm mới trạng thái" aria-label="Làm mới trạng thái">↻</button>
-              </div>
-              <div class="bot-control-grid">
-                <form class="control-form" id="voiceControlForm">
-                  <h3>Treo Voice</h3>
-                  <label for="botGuild">Server</label>
-                  <select id="botGuild"></select>
-                  <label for="botVoiceChannel">Phòng voice</label>
-                  <select id="botVoiceChannel"></select>
-                  <div class="bot-guild-access" id="botGuildAccess"></div>
-                  <div class="control-actions">
-                    <button class="cyan" id="botJoinVoice" type="button">TREO ROOM</button>
-                    <button id="botLeaveVoice" type="button">RỜI ROOM</button>
-                  </div>
-                </form>
-                <form class="control-form hidden" id="presenceForm">
-                  <h3>Bot Presence / RPC</h3>
-                  <div class="control-pair">
-                    <select id="presenceType" aria-label="Loại hoạt động">
-                      <option value="playing">Playing</option>
-                      <option value="listening">Listening</option>
-                      <option value="watching">Watching</option>
-                      <option value="streaming">Streaming</option>
-                      <option value="competing">Competing</option>
-                      <option value="none">Tắt activity</option>
-                    </select>
-                    <select id="presenceStatus" aria-label="Trạng thái bot">
-                      <option value="online">Online</option>
-                      <option value="idle">Idle</option>
-                      <option value="dnd">Do not disturb</option>
-                      <option value="invisible">Invisible</option>
-                    </select>
-                  </div>
-                  <input id="presenceName" maxlength="128" placeholder="Tên hoạt động" />
-                  <div class="control-pair">
-                    <input id="presenceDetails" maxlength="128" placeholder="Details" />
-                    <input id="presenceState" maxlength="128" placeholder="State" />
-                  </div>
-                  <input id="presenceUrl" maxlength="500" placeholder="Streaming URL" />
-                  <button class="pink" type="submit">CẬP NHẬT PRESENCE</button>
-                </form>
-              </div>
-              <div class="bot-runtime-message" id="botRuntimeMessage"></div>
-              <div class="voice-connections" id="voiceConnections"></div>
-            </div>
-          </section>
-
-          <section class="detail-panel hidden" id="support">
-            <div class="section-title">
-              <h2>Support</h2>
-              <span>Liên hệ admin hoặc nạp tiền thủ công</span>
-            </div>
-            <div class="split">
-              <div>
-                <div class="section-title compact">
-                  <h2>Donate</h2>
-                  <span id="paidAmount">0 VNĐ</span>
-                </div>
-                <div class="rank-list" id="donateTop"></div>
-              </div>
-              <div>
-                <div class="section-title compact">
-                  <h2>Tìm User</h2>
-                  <span>Discord ID hoặc tên</span>
-                </div>
-                <form class="search-box" id="searchForm">
-                  <input id="searchInput" name="q" autocomplete="off" placeholder="Nhập tối thiểu 3 ký tự" />
-                  <button type="submit">TÌM</button>
-                </form>
-                <div class="rank-list search-results" id="searchResults"></div>
-              </div>
-            </div>
-          </section>
-        </section>
+        </div>
       </main>
     </div>
-    <script src="/app.js?v=20260618-bot-control"></script>
+    <script src="/app.js?v=20260620-voice-station"></script>
   </body>
 </html>

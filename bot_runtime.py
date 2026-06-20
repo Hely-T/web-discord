@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import threading
 from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -76,6 +75,8 @@ class BotRuntime:
     async def _snapshot(self, bot, allowed: set[str]) -> dict:
         guilds = []
         connections = []
+        voice_cog = self._voice_cog(bot)
+        persistent_targets = dict(getattr(voice_cog, "auto_reconnect_channels", {})) if voice_cog else {}
         for guild_id in sorted(allowed):
             if not guild_id.isdigit():
                 continue
@@ -83,6 +84,9 @@ class BotRuntime:
             if guild is None:
                 continue
             voice_client = guild.voice_client
+            voice_connected = bool(voice_client and voice_client.is_connected())
+            target_channel_id = persistent_targets.get(guild.id)
+            target_channel = guild.get_channel(target_channel_id) if target_channel_id else None
             channels = []
             for channel in sorted(guild.voice_channels, key=lambda item: (item.position, item.id)):
                 permissions = channel.permissions_for(guild.me) if guild.me else None
@@ -100,10 +104,12 @@ class BotRuntime:
                     "id": str(guild.id),
                     "name": guild.name,
                     "channels": channels,
-                    "voice_channel_id": str(voice_client.channel.id) if voice_client else "",
+                    "voice_channel_id": str(voice_client.channel.id) if voice_connected else "",
+                    "target_channel_id": str(target_channel_id) if target_channel_id else "",
+                    "target_channel_name": getattr(target_channel, "name", "") or "",
                 }
             )
-            if voice_client:
+            if voice_connected:
                 connections.append(
                     {
                         "guild_id": str(guild.id),
@@ -111,6 +117,7 @@ class BotRuntime:
                         "channel_id": str(voice_client.channel.id),
                         "channel_name": voice_client.channel.name,
                         "latency_ms": round(voice_client.latency * 1000),
+                        "persistent": guild.id in persistent_targets,
                     }
                 )
         return {
@@ -145,24 +152,31 @@ class BotRuntime:
         if not permissions or not permissions.connect:
             raise BotRuntimeError("Bot không có quyền Connect vào phòng này.")
 
-        voice_client = guild.voice_client
-        if voice_client and voice_client.channel.id != channel.id:
-            await voice_client.move_to(channel)
-        elif not voice_client:
-            await channel.connect(
-                timeout=20.0,
-                reconnect=True,
-                self_mute=True,
-                self_deaf=False,
-            )
-
         voice_cog = self._voice_cog(bot)
         if voice_cog:
-            voice_cog.auto_reconnect_channels[guild.id] = channel.id
-            voice_cog.voice_timers[guild.id] = datetime.datetime.now()
+            voice_cog.set_auto_reconnect(guild.id, channel.id)
+            connected = await voice_cog.ensure_voice_connection(guild.id, channel.id)
+        else:
+            voice_client = guild.voice_client
+            if voice_client and voice_client.is_connected() and voice_client.channel.id != channel.id:
+                await voice_client.move_to(channel)
+            elif not voice_client or not voice_client.is_connected():
+                if voice_client:
+                    await voice_client.disconnect(force=True)
+                await channel.connect(
+                    timeout=20.0,
+                    reconnect=True,
+                    self_mute=True,
+                    self_deaf=False,
+                )
+            connected = True
         return {
             "ok": True,
-            "message": f"Bot đang treo tại {channel.name}.",
+            "message": (
+                f"Bot đang treo persistent tại {channel.name}."
+                if connected
+                else f"Đã ghim {channel.name}; bot sẽ tự thử lại mỗi 15 giây."
+            ),
             "guild_id": guild_id,
             "channel_id": channel_id,
         }
@@ -175,8 +189,7 @@ class BotRuntime:
             raise BotRuntimeError("Bot chưa được thêm vào server này.")
         voice_cog = self._voice_cog(bot)
         if voice_cog:
-            voice_cog.auto_reconnect_channels.pop(guild.id, None)
-            voice_cog.voice_timers.pop(guild.id, None)
+            voice_cog.clear_auto_reconnect(guild.id)
         if guild.voice_client:
             await guild.voice_client.disconnect(force=True)
         return {"ok": True, "message": f"Bot đã rời voice tại {guild.name}."}

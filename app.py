@@ -160,7 +160,7 @@ def read_oauth_state(state: str) -> dict:
         if int(time.time()) - int(payload.get("created_at", 0)) > 600:
             raise ValueError("expired")
         next_view = str(payload.get("next", "dashboard"))
-        if next_view not in {"dashboard", "admin", "status", "support"}:
+        if next_view not in {"dashboard", "control", "admin", "status", "support"}:
             next_view = "dashboard"
         return {"next": next_view}
     except (ValueError, TypeError, json.JSONDecodeError, binascii.Error) as exc:
@@ -955,11 +955,17 @@ def login_enabled() -> bool:
 def oauth_next_url(next_view: str) -> str:
     if next_view == "dashboard":
         return "/dashboard"
+    if next_view == "control":
+        return "/control"
     if next_view == "admin":
         return "/admin"
     if next_view in {"status", "support"}:
         return f"/#{next_view}"
     return "/"
+
+
+def oauth_error_url(message: str) -> str:
+    return "/?" + urllib.parse.urlencode({"login_error": message[:240]})
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1006,10 +1012,11 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/admin":
             self.send_file(STATIC_DIR / "admin.html", send_body=send_body)
             return
-        if parsed.path == "/dashboard" and not self.current_session():
-            self.redirect("/auth/login?next=dashboard")
+        if parsed.path in {"/dashboard", "/control"} and not self.current_session():
+            next_view = parsed.path.lstrip("/")
+            self.redirect(f"/auth/login?next={next_view}")
             return
-        if parsed.path in {"/", "/status", "/dashboard"}:
+        if parsed.path in {"/", "/status", "/dashboard", "/control"}:
             self.send_file(STATIC_DIR / "index.html", send_body=send_body)
             return
         safe_path = parsed.path.lstrip("/")
@@ -1058,11 +1065,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_login(self, query: str = "") -> None:
         if not login_enabled():
-            self.redirect("/")
+            self.redirect(oauth_error_url("OAuth chưa được cấu hình trên máy chủ."))
             return
         params_in = parse_qs(query)
         next_view = params_in.get("next", ["dashboard"])[0]
-        if next_view not in {"dashboard", "admin", "status", "support"}:
+        if next_view not in {"dashboard", "control", "admin", "status", "support"}:
             next_view = "dashboard"
         state = make_oauth_state(next_view)
         params = {
@@ -1076,6 +1083,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_callback(self, query: str) -> None:
         params = parse_qs(query)
+        discord_error = params.get("error_description", params.get("error", [""]))[0]
+        if discord_error:
+            self.redirect(oauth_error_url(f"Discord từ chối đăng nhập: {discord_error}"))
+            return
         code = params.get("code", [""])[0]
         state = params.get("state", [""])[0]
         state_data = read_oauth_state(state)
@@ -1084,7 +1095,7 @@ class Handler(BaseHTTPRequestHandler):
                 "[oauth] callback rejected "
                 f"has_code={bool(code)} has_state={bool(state)} path=/auth/callback"
             )
-            self.redirect("/?login=failed")
+            self.redirect(oauth_error_url("Phiên đăng nhập đã hết hạn. Hãy thử lại."))
             return
         try:
             token = post_form(
@@ -1100,9 +1111,15 @@ class Handler(BaseHTTPRequestHandler):
             access_token = token["access_token"]
             user = discord_get("/users/@me", access_token)
             guilds = owned_guilds(discord_get("/users/@me/guilds", access_token))
-        except (KeyError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+        except (KeyError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
             print(f"[oauth] callback failed: {type(exc).__name__}: {exc}")
-            self.redirect("/?login=failed")
+            if isinstance(exc, urllib.error.HTTPError) and exc.code == 401:
+                message = "OAuth Client ID hoặc Client Secret không đúng cùng một Discord Application."
+            elif isinstance(exc, urllib.error.HTTPError) and exc.code == 400:
+                message = "Redirect URI hoặc mã OAuth không khớp cấu hình Discord Developer Portal."
+            else:
+                message = "Không thể kết nối Discord OAuth. Kiểm tra cấu hình và thử lại."
+            self.redirect(oauth_error_url(message))
             return
         save_web_login(user, guilds)
         sid = secrets.token_urlsafe(32)
@@ -1136,6 +1153,7 @@ class Handler(BaseHTTPRequestHandler):
         if not session:
             return {
                 "logged_in": False,
+                "login_enabled": login_enabled(),
                 "casino_invite": invite_url(CONFIG["casino_client_id"]),
                 "general_invite": "",
                 "guilds": [],
@@ -1145,6 +1163,7 @@ class Handler(BaseHTTPRequestHandler):
         if user_state.get("status") == "banned":
             return {
                 "logged_in": False,
+                "login_enabled": login_enabled(),
                 "banned": True,
                 "message": "Tài khoản của bạn đã bị khóa trên web.",
                 "casino_invite": invite_url(CONFIG["casino_client_id"]),
@@ -1168,6 +1187,7 @@ class Handler(BaseHTTPRequestHandler):
             )
         return {
             "logged_in": True,
+            "login_enabled": login_enabled(),
             "user": {
                 "id": str(user.get("id", "")),
                 "username": user.get("username", ""),

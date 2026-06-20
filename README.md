@@ -1,15 +1,16 @@
-# Bleck Lous Web
+# Bleck Lous Voice Station
 
-Web public kiểu Jockie cho 2 bot Discord hiện có. Trang ngoài chỉ là hero + invite:
+Web điều khiển bot voice đang chạy cùng process. Trang chính là giao diện vận hành Voice/RPC:
 
-- Invite bot casino: public, bấm là mời bot.
-- Invite bot tổng: phải nhập key hợp lệ rồi mới mở link invite.
-- Dashboard: bấm là bắt login Discord, lưu user vào `web.sqlite3`, sau đó mới thấy server, nạp tiền thủ công, thuê key, kích hoạt key.
-- Status: hiển thị bot đang operational hay không, số server, số user và uptime.
+- Đăng nhập Discord OAuth2, không nhận user token.
+- Chọn server và room để bot treo voice persistent.
+- Lưu room đã ghim vào `archive_bot/data/voice_state.json`, tự nối lại sau disconnect, gateway reconnect hoặc service restart.
+- Hiển thị room đang kết nối và room đang chờ reconnect.
+- Admin web có thể đổi Presence/RPC chung của bot.
+- User kích hoạt key cho server ngay trong mục `Quyền truy cập`.
 - Admin panel riêng ở `/admin`, không dùng layout public; dùng để tạo/gia hạn/khóa key, xem user sử dụng key, ban/reset user, cấp quyền user/admin và xem yêu cầu nạp/thuê.
 - Dữ liệu bot đọc SQLite hiện có ở chế độ read-only.
 - Source archive cũ đã được ghép vào `archive_bot/`; `main.py` là file chính mới, chạy web dashboard và bot voice trong cùng process.
-- Dashboard đã có Bot Control để chọn phòng voice, treo/rời room và đổi Presence/RPC của bot.
 
 ## Source archive đã tích hợp
 
@@ -31,7 +32,7 @@ File `config.json` thật trong archive có token nên không được copy vào
 
 ## Điều khiển bot trên web
 
-Sau khi login Discord, vào `Dashboard`:
+Sau khi login Discord, vào `/control`:
 
 - User có key còn hiệu lực được chọn server/phòng voice và treo hoặc rời room.
 - User chỉ thấy server mình có quyền quản lý và đã kích hoạt key; admin web thấy các server mình quản lý.
@@ -120,6 +121,8 @@ GENERAL_SERVER_COUNT=0
 
 `CASINO_BOT_CLIENT_ID` và `GENERAL_BOT_CLIENT_ID` là Application/Client ID của từng bot. Web tự tạo invite URL theo từng server user đang quản lý.
 
+`DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` và redirect URL phải thuộc cùng một Discord Application. Nên dùng chính Application của voice bot cho cả OAuth và bot token để tránh cấu hình nhầm. Redirect URL trên Portal phải khớp tuyệt đối, kể cả `https`, domain và path. Source archive cũ không có web login; `config.json` của nó chỉ đăng nhập bot bằng token, nên Voice Station dùng OAuth2 chính thức cho người dùng web.
+
 Nếu sau này bot ghi được số server thật vào API/database thì có thể thay phần status. Hiện tại web dùng `GENERAL_SERVER_COUNT`, `CASINO_SERVER_COUNT`; bot tổng còn có số server đã kích hoạt key làm fallback.
 
 ## Deploy Ubuntu 22.04
@@ -148,6 +151,7 @@ Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
 Environment=BOT_PREFIX=$
+Environment=VOICE_STATE_PATH=/opt/bleck-lous-web/archive_bot/data/voice_state.json
 # Optional. Leave empty/commented for web-only mode.
 # Use the Bot token from Discord Developer Portal to run the voice bot too.
 # Environment=DISCORD_TOKEN=your_bot_token
