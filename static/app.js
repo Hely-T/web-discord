@@ -51,8 +51,11 @@ function showSection(section) {
   });
   const titles = {
     voice: "Treo phòng voice",
-    presence: "RPC và presence",
+    presence: "RPC cá nhân",
     access: "Quyền truy cập",
+    invites: "Mời bot",
+    faq: "FAQ và Commands",
+    rules: "Rules",
   };
   byId("pageTitle").textContent = titles[section] || titles.voice;
   history.replaceState(null, "", section === "voice" ? "/control" : `/control#${section}`);
@@ -62,6 +65,8 @@ function renderAccount() {
   const loggedIn = Boolean(state.me?.logged_in);
   byId("loginGate").classList.toggle("hidden", loggedIn);
   byId("workspace").classList.toggle("hidden", !loggedIn);
+  byId("sideNav").classList.toggle("hidden", !loggedIn);
+  byId("sidebarFoot").classList.toggle("hidden", !loggedIn);
   const account = byId("accountButton");
   if (!loggedIn) {
     const enabled = state.me?.login_enabled !== false;
@@ -71,6 +76,9 @@ function renderAccount() {
     byId("loginButton").href = enabled ? "/auth/login?next=control" : "#";
     byId("loginButton").classList.toggle("disabled", !enabled);
     account.style.removeProperty("--avatar");
+    byId("publicGeneralInvite").href = state.me?.general_invite || "#";
+    byId("publicCasinoInvite").href = state.me?.casino_invite || "#";
+    byId("publicExtensionInvite").href = state.me?.extension_invite || "#";
     return;
   }
   const user = state.me.user;
@@ -78,6 +86,18 @@ function renderAccount() {
   account.href = "/auth/logout";
   const avatar = avatarUrl(user);
   if (avatar) account.style.setProperty("--avatar", `url(${avatar})`);
+}
+
+function renderInvites() {
+  const list = byId("inviteGuildList");
+  const guilds = state.me?.guilds || [];
+  list.innerHTML = guilds.length ? guilds.map((guild) => `
+    <article class="invite-guild-row"><div><strong>${escapeHtml(guild.name)}</strong><small>${guild.has_bot_key ? "Key Bot active" : "Chưa có key Bot"}</small></div><div class="access-actions">
+      ${guild.casino_invite ? `<a class="secondary-button" target="_blank" rel="noreferrer" href="${escapeHtml(guild.casino_invite)}">Casino</a>` : ""}
+      ${guild.extension_invite ? `<a class="secondary-button" target="_blank" rel="noreferrer" href="${escapeHtml(guild.extension_invite)}">Extension</a>` : ""}
+      ${guild.general_invite ? `<a class="primary-button" target="_blank" rel="noreferrer" href="${escapeHtml(guild.general_invite)}">Bot Tổng</a>` : `<span class="permission-label">Bot Tổng cần key Bot</span>`}
+    </div></article>
+  `).join("") : '<div class="empty-state">Không tìm thấy server bạn quản lý.</div>';
 }
 
 function renderAccess() {
@@ -211,22 +231,31 @@ function renderControl() {
   renderChannels();
   renderSessions();
 
-  const canPresence = Boolean(control?.can_manage_presence);
-  byId("presenceForm").querySelectorAll("input, select, button").forEach((field) => { field.disabled = !canPresence; });
-  byId("presencePermission").textContent = canPresence ? "Admin enabled" : "Admin only";
-  const presence = control?.presence || {};
-  byId("presenceType").value = presence.type || "playing";
-  byId("presenceStatus").value = presence.status === "do_not_disturb" ? "dnd" : (presence.status || "online");
-  byId("presenceName").value = presence.name || "";
-  byId("presenceDetails").value = presence.details || "";
-  byId("presenceState").value = presence.state || "";
-  byId("presenceUrl").value = presence.url || "";
+}
+
+async function loadRpc() {
+  if (!state.me?.logged_in) return;
+  const rpc = await request("/api/rpc/profile");
+  const enabled = Boolean(rpc.enabled);
+  byId("presencePermission").textContent = enabled ? "Extension active" : "Cần key Extension";
+  byId("presenceForm").querySelectorAll("input:not([readonly]), select, button").forEach((field) => { field.disabled = !enabled; });
+  byId("deviceTokenButton").disabled = !enabled;
+  const profile = rpc.profile || {};
+  byId("presenceAppId").value = rpc.application_id || "Chưa cấu hình RPC_APPLICATION_ID";
+  byId("presenceType").value = profile.activity_type || "playing";
+  byId("presenceDetails").value = profile.details || "";
+  byId("presenceState").value = profile.state || "";
+  byId("presenceImage").value = profile.large_image || "";
+  byId("presenceImageText").value = profile.large_text || "";
+  byId("presenceButtonLabel").value = profile.button_label || "";
+  byId("presenceButtonUrl").value = profile.button_url || "";
 }
 
 async function loadMe() {
   state.me = await request("/api/me");
   renderAccount();
   renderAccess();
+  if (state.me.logged_in) renderInvites();
   return state.me;
 }
 
@@ -290,22 +319,31 @@ async function leaveVoice() {
 async function submitPresence(event) {
   event.preventDefault();
   try {
-    const result = await request("/api/bot/presence", {
+    const result = await request("/api/rpc/profile", {
       method: "POST",
       body: JSON.stringify({
-        type: byId("presenceType").value,
-        status: byId("presenceStatus").value,
-        name: byId("presenceName").value,
+        activity_type: byId("presenceType").value,
         details: byId("presenceDetails").value,
         state: byId("presenceState").value,
-        url: byId("presenceUrl").value,
+        large_image: byId("presenceImage").value,
+        large_text: byId("presenceImageText").value,
+        button_label: byId("presenceButtonLabel").value,
+        button_url: byId("presenceButtonUrl").value,
       }),
     });
     setNotice(result.message, "success");
-    await loadControl({ quiet: true });
+    await loadRpc();
   } catch (error) {
     setNotice(error.message, "error");
   }
+}
+
+async function createDeviceToken() {
+  try {
+    const result = await request("/api/rpc/device-token", { method: "POST", body: JSON.stringify({}) });
+    byId("deviceCommand").textContent = `curl -O https://${location.host}/rpc_companion.py\n${result.command}`;
+    setNotice("Đã tạo token companion mới. Token cũ đã bị thu hồi.", "success");
+  } catch (error) { setNotice(error.message, "error"); }
 }
 
 async function submitKey(form) {
@@ -321,6 +359,7 @@ async function submitKey(form) {
     if (!result.ok) throw new Error(apiError(result));
     state.me = result.me;
     renderAccess();
+    renderInvites();
     setNotice(result.message, "success");
     await loadControl({ quiet: true });
   } catch (error) {
@@ -341,8 +380,10 @@ async function submitGlobalKey(event) {
     });
     state.me = result.me;
     renderAccess();
+    renderInvites();
     setNotice(result.message, "success");
     await loadControl({ quiet: true });
+    await loadRpc();
   } catch (error) {
     setNotice(error.message, "error");
   } finally { button.disabled = false; }
@@ -357,12 +398,26 @@ async function boot() {
   }
   try {
     await loadMe();
-    if (state.me.logged_in) await loadControl();
+    if (state.me.logged_in) {
+      await Promise.all([loadControl(), loadRpc()]);
+      const features = await request("/api/archive/features");
+      renderArchiveFeatures(features);
+    }
   } catch (error) {
     setNotice(error.message, "error");
   }
   const initial = location.hash.slice(1);
-  showSection(["voice", "presence", "access"].includes(initial) ? initial : "voice");
+  if (state.me?.logged_in) {
+    showSection(["voice", "presence", "access", "invites", "faq", "rules"].includes(initial) ? initial : "voice");
+  } else {
+    byId("pageTitle").textContent = "Mời bot";
+    history.replaceState(null, "", "/");
+  }
+}
+
+function renderArchiveFeatures(features) {
+  const grid = byId("archiveFeatures");
+  grid.innerHTML = (features.groups || []).map((group) => `<article class="feature-card"><h3>${escapeHtml(group.name)}</h3><p>${escapeHtml(group.description)}</p>${group.commands.map((cmd) => `<div class="command-row"><code>${escapeHtml(cmd.usage)}</code><span>${escapeHtml(cmd.description)}</span></div>`).join("")}</article>`).join("");
 }
 
 document.querySelectorAll("[data-section]").forEach((button) => {
@@ -372,6 +427,7 @@ byId("guildSelect").addEventListener("change", renderChannels);
 byId("voiceForm").addEventListener("submit", submitVoice);
 byId("leaveButton").addEventListener("click", leaveVoice);
 byId("presenceForm").addEventListener("submit", submitPresence);
+byId("deviceTokenButton").addEventListener("click", createDeviceToken);
 byId("refreshButton").addEventListener("click", () => loadControl());
 byId("accessList").addEventListener("submit", (event) => {
   if (event.target.matches(".key-form")) {

@@ -8,7 +8,8 @@ Web điều khiển bot voice đang chạy cùng process. Trang chính là giao 
 - Hiển thị room đang kết nối và room đang chờ reconnect.
 - Admin web có thể đổi Presence/RPC chung của bot.
 - User kích hoạt key cho server ngay trong mục `Quyền truy cập`.
-- Key có hai loại: `bot` mở Voice Room/mời bot theo server; `extension` mở RPC theo tài khoản.
+- Key có hai loại: `bot` mở Bot Tổng theo server; `extension` mở cấu hình RPC cá nhân và companion local.
+- Trang chưa đăng nhập chỉ hiển thị ba link mời bot. Voice/RPC/Access/FAQ/Rules mở sau OAuth.
 - Đăng nhập web tự lưu user là verified. Bot có `/verify`, `/verify-panel`, `/verify-setup`, `/verify-sync` và tự cấp lại role khi user đã xác minh tham gia server mới. Chạy `/verify-setup confirm:true` trong kênh xác minh để ẩn các kênh còn lại khỏi `@everyone`.
 - Admin panel riêng ở `/admin`, không dùng layout public; dùng để tạo/gia hạn/khóa key, xem user sử dụng key, ban/reset user, cấp quyền user/admin và xem yêu cầu nạp/thuê.
 - Dữ liệu bot đọc SQLite hiện có ở chế độ read-only.
@@ -39,7 +40,8 @@ Sau khi login Discord, vào `/control`:
 - User có key còn hiệu lực được chọn server/phòng voice và treo hoặc rời room.
 - User chỉ thấy server mình có quyền quản lý và đã kích hoạt key; admin web thấy các server mình quản lý.
 - Role `admin` được đổi activity type, status, name, details, state và streaming URL của bot.
-- Presence này là trạng thái của bot Discord dùng chung. Rich Presence cá nhân với application assets/image vẫn phải chạy riêng trên máy của từng người.
+- RPC cá nhân chạy bằng `static/rpc_companion.py` trên máy đang mở Discord Desktop. Companion dùng Discord IPC và device token của web, không dùng user token.
+- Discord không có API chính thức để VPS điều khiển tài khoản cá nhân vào voice channel. Room Control vẫn dùng bot account; không triển khai self-bot.
 - Web không nhận và không lưu user token Discord.
 
 ## Chạy local
@@ -59,6 +61,13 @@ python3 main.py
 ```
 
 Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, nó sẽ chạy thêm bot voice và cho phép web đổi presence của bot. RPC cá nhân không chạy chung trong service này.
+
+## RPC cá nhân
+
+1. Kích hoạt key loại `extension` trong Quyền truy cập.
+2. Vào RPC presence, lưu profile và bấm **Tạo lệnh kết nối**.
+3. Tải `rpc_companion.py`, mở Discord Desktop rồi chạy lệnh web cung cấp.
+4. Companion cập nhật cấu hình qua local Discord IPC; tạo token mới sẽ thu hồi token cũ.
 
 Nếu chạy trên máy đang có source bot:
 
@@ -116,6 +125,8 @@ DISCORD_REDIRECT_URI=https://nasdaq-fx.com/auth/callback
 DISCORD_OAUTH_MODE=implicit
 CASINO_BOT_CLIENT_ID=client_id_bot_casino
 GENERAL_BOT_CLIENT_ID=client_id_bot_tong
+EXTENSION_BOT_CLIENT_ID=client_id_bot_extension
+RPC_APPLICATION_ID=application_id_dung_cho_rich_presence
 ADMIN_PASSWORD=mat_khau_admin_manh
 CONTACT_ADMIN_URL=https://discord.gg/...
 CASINO_SERVER_COUNT=0
@@ -150,6 +161,8 @@ Environment=DISCORD_REDIRECT_URI=https://nasdaq-fx.com/auth/callback
 Environment=DISCORD_OAUTH_MODE=implicit
 Environment=CASINO_BOT_CLIENT_ID=casino_bot_client_id
 Environment=GENERAL_BOT_CLIENT_ID=general_bot_client_id
+Environment=EXTENSION_BOT_CLIENT_ID=extension_bot_client_id
+Environment=RPC_APPLICATION_ID=discord_application_id_for_rich_presence
 Environment=ADMIN_PASSWORD=change_this_password
 Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0

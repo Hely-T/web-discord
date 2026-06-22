@@ -72,6 +72,11 @@ button:disabled, input:disabled, select:disabled { opacity: .45; cursor: not-all
 .login-checks span { grid-row: 1 / span 2; width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #3a4653; border-radius: 50%; color: var(--green); font-size: 11px; font-weight: 800; }
 .login-checks strong { font-size: 13px; }
 .login-checks small { color: var(--muted); font-size: 12px; }
+.public-invites { display: grid; gap: 10px; }
+.invite-card { padding: 18px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.invite-card:hover { border-color: var(--green); }
+.invite-card strong, .invite-card small { display: block; }
+.invite-card small { color: var(--muted); }
 
 .workspace { padding: 28px clamp(20px, 4vw, 54px) 56px; }
 .view { display: none; }
@@ -82,6 +87,8 @@ button:disabled, input:disabled, select:disabled { opacity: .45; cursor: not-all
 .metrics-grid span { color: var(--muted); font-size: 11px; text-transform: uppercase; }
 .metrics-grid strong { margin: 9px 0 4px; font-size: 22px; overflow-wrap: anywhere; }
 .metrics-grid small { color: var(--muted); font-size: 12px; }
+.safety-note { margin-top: 12px; padding: 11px 14px; border-left: 3px solid var(--yellow); background: var(--surface); color: var(--muted); font-size: 12px; }
+.safety-note strong { color: var(--yellow); }
 .content-grid { margin-top: 20px; display: grid; grid-template-columns: minmax(330px, .9fr) minmax(360px, 1.1fr); gap: 20px; }
 .panel { padding: 22px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .panel-head { min-height: 45px; margin-bottom: 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
@@ -130,6 +137,22 @@ input:focus, select:focus { border-color: var(--cyan); }
 .access-status { justify-self: end; color: var(--green); font-size: 10px; font-weight: 850; letter-spacing: 1px; }
 .key-form { display: grid; grid-template-columns: minmax(130px, 1fr) auto; gap: 8px; }
 .key-form input, .key-form button { min-height: 38px; }
+.wide-panel { max-width: 1100px; }
+.companion-box { margin-top: 18px; padding: 16px; display: grid; gap: 12px; border: 1px dashed #3a4551; border-radius: 6px; background: #11161c; }
+.companion-box p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.companion-box code { padding: 12px; border-radius: 4px; background: #080b0f; color: var(--cyan); white-space: pre-wrap; overflow-wrap: anywhere; }
+.invite-guild-list, .feature-grid, .rules-list { display: grid; gap: 10px; }
+.invite-guild-row { padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: 5px; background: #11161c; }
+.invite-guild-row strong, .invite-guild-row small { display: block; }
+.invite-guild-row small { margin-top: 5px; color: var(--muted); }
+.info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.info-grid article, .feature-card { padding: 16px; border: 1px solid var(--line); border-radius: 5px; background: #11161c; }
+.info-grid h3, .feature-card h3 { margin: 0 0 8px; font-size: 14px; }
+.info-grid p, .feature-card p, .rules-list p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.command-row { padding: 10px 0; display: grid; grid-template-columns: minmax(160px, .6fr) 1fr; gap: 12px; border-top: 1px solid var(--line); font-size: 12px; }
+.command-row code { color: var(--cyan); }
+.rules-list article { padding: 16px; display: grid; grid-template-columns: 36px 1fr; gap: 12px; border: 1px solid var(--line); border-radius: 5px; background: #11161c; }
+.rules-list b { color: var(--green); }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
@@ -138,7 +161,7 @@ input:focus, select:focus { border-color: var(--cyan); }
   .brand > span:last-child, .nav-item > span:last-child, .sidebar-foot span { display: none; }
   .nav-item { justify-content: center; padding: 8px; }
   .sidebar-foot { text-align: center; padding-left: 0; padding-right: 0; }
-  .content-grid { grid-template-columns: 1fr; }
+  .content-grid, .info-grid { grid-template-columns: 1fr; }
   .login-gate { grid-template-columns: 1fr; align-content: center; }
 }
 
@@ -146,7 +169,7 @@ input:focus, select:focus { border-color: var(--cyan); }
   .app-shell { display: block; padding-bottom: 66px; }
   .sidebar { position: fixed; inset: auto 0 0; z-index: 30; width: auto; height: 66px; padding: 8px 12px; display: block; border: 0; border-top: 1px solid var(--line); }
   .sidebar .brand, .sidebar-foot { display: none; }
-  .sidebar nav { height: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .sidebar nav { height: 100%; display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
   .nav-item { min-height: 48px; flex-direction: column; gap: 2px; font-size: 9px; }
   .nav-item > span:last-child { display: block; }
   .nav-icon { width: 20px; height: 20px; border: 0; }
@@ -171,4 +194,6 @@ input:focus, select:focus { border-color: var(--cyan); }
   .access-status { padding-left: 53px; }
   .session-row { grid-template-columns: 10px minmax(0, 1fr); }
   .session-meta { grid-column: 2; text-align: left; }
+  .invite-guild-row { align-items: stretch; flex-direction: column; }
+  .access-actions { justify-self: stretch; flex-wrap: wrap; }
 }

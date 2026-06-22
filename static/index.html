@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Bleck Lous Voice Station</title>
-    <link rel="stylesheet" href="/styles.css?v=20260620-voice-station" />
+    <link rel="stylesheet" href="/styles.css?v=20260622-rpc-companion" />
   </head>
   <body>
     <div class="app-shell">
@@ -14,7 +14,7 @@
           <span class="brand-mark">BL</span>
           <span><strong>Bleck Lous</strong><small>Voice Station</small></span>
         </a>
-        <nav aria-label="Điều hướng">
+        <nav id="sideNav" aria-label="Điều hướng">
           <button class="nav-item active" type="button" data-section="voice">
             <span class="nav-icon">V</span><span>Voice rooms</span>
           </button>
@@ -24,8 +24,11 @@
           <button class="nav-item" type="button" data-section="access">
             <span class="nav-icon">K</span><span>Quyền truy cập</span>
           </button>
+          <button class="nav-item" type="button" data-section="invites"><span class="nav-icon">+</span><span>Mời bot</span></button>
+          <button class="nav-item" type="button" data-section="faq"><span class="nav-icon">?</span><span>FAQ</span></button>
+          <button class="nav-item" type="button" data-section="rules"><span class="nav-icon">!</span><span>Rules</span></button>
         </nav>
-        <div class="sidebar-foot">
+        <div class="sidebar-foot" id="sidebarFoot">
           <a href="/admin">Admin</a>
           <span id="domain">nasdaq-fx.com</span>
         </div>
@@ -49,15 +52,15 @@
 
         <section class="login-gate" id="loginGate">
           <div class="login-copy">
-            <span class="status-chip">DISCORD OAUTH2</span>
-            <h2>Đăng nhập để điều khiển bot voice</h2>
-            <p>Discord chỉ cấp thông tin tài khoản và danh sách server bạn quản lý. Web không yêu cầu token tài khoản cá nhân.</p>
+            <span class="status-chip">BLECK LOUS BOTS</span>
+            <h2>Mời bot vào server của bạn</h2>
+            <p>Trang công khai chỉ cung cấp link mời bot. Đăng nhập Discord để dùng key, dashboard, RPC, FAQ và Rules.</p>
             <a class="primary-button" id="loginButton" href="/auth/login?next=control">Tiếp tục với Discord</a>
           </div>
-          <div class="login-checks" aria-label="Trạng thái đăng nhập">
-            <div><span>1</span><strong>Xác thực Discord</strong><small>OAuth2 identify + guilds</small></div>
-            <div><span>2</span><strong>Chọn server</strong><small>Server có key hiệu lực</small></div>
-            <div><span>3</span><strong>Ghim room</strong><small>Tự nối lại khi mất voice</small></div>
+          <div class="public-invites" aria-label="Mời bot">
+            <a id="publicGeneralInvite" class="invite-card" href="#"><strong>Bot Tổng</strong><small>Quản lý server và tiện ích</small></a>
+            <a id="publicCasinoInvite" class="invite-card" href="#"><strong>Bot Casino</strong><small>Game và OWO public</small></a>
+            <a id="publicExtensionInvite" class="invite-card" href="#"><strong>Bot Extension</strong><small>Voice và hệ thống mở rộng</small></a>
           </div>
         </section>
 
@@ -68,6 +71,7 @@
               <article><span>Server được cấp</span><strong id="guildCount">0</strong><small>Có thể điều khiển</small></article>
               <article><span>Room đang treo</span><strong id="connectionCount">0</strong><small>Persistent voice</small></article>
             </div>
+            <div class="safety-note"><strong>Voice chính thức:</strong> Room Control điều khiển bot account. Discord không cho website điều khiển tài khoản cá nhân vào voice mà không dùng self-bot/user token.</div>
 
             <div class="content-grid">
               <section class="panel voice-panel">
@@ -106,8 +110,8 @@
           <section class="view" id="presenceView" data-view="presence">
             <section class="panel presence-panel">
               <div class="panel-head">
-                <div><p>BOT PRESENCE</p><h2>RPC và trạng thái Discord</h2></div>
-                <span class="permission-label" id="presencePermission">Admin only</span>
+                <div><p>PERSONAL RICH PRESENCE</p><h2>RPC tài khoản Discord của bạn</h2></div>
+                <span class="permission-label" id="presencePermission">Extension key</span>
               </div>
               <form class="presence-form" id="presenceForm">
                 <label>Loại hoạt động
@@ -116,24 +120,22 @@
                     <option value="listening">Listening</option>
                     <option value="watching">Watching</option>
                     <option value="competing">Competing</option>
-                    <option value="streaming">Streaming</option>
-                    <option value="none">Không hiển thị</option>
                   </select>
                 </label>
-                <label>Trạng thái
-                  <select id="presenceStatus">
-                    <option value="online">Online</option>
-                    <option value="idle">Idle</option>
-                    <option value="dnd">Do not disturb</option>
-                    <option value="invisible">Invisible</option>
-                  </select>
-                </label>
-                <label class="wide">Tên hoạt động<input id="presenceName" maxlength="128" placeholder="Đang treo voice" /></label>
-                <label>Details<input id="presenceDetails" maxlength="128" placeholder="Bleck Lous" /></label>
+                <label>Application ID<input id="presenceAppId" readonly /></label>
+                <label>Details<input id="presenceDetails" maxlength="128" placeholder="Đang sử dụng Bleck Lous" /></label>
                 <label>State<input id="presenceState" maxlength="128" placeholder="nasdaq-fx.com" /></label>
-                <label class="wide">Stream URL<input id="presenceUrl" type="url" placeholder="https://twitch.tv/..." /></label>
-                <button class="primary-button wide" type="submit">Cập nhật RPC</button>
+                <label>Large image key<input id="presenceImage" maxlength="256" placeholder="Tên asset trong Developer Portal" /></label>
+                <label>Large image text<input id="presenceImageText" maxlength="128" placeholder="Bleck Lous" /></label>
+                <label>Nhãn nút<input id="presenceButtonLabel" maxlength="32" placeholder="Truy cập website" /></label>
+                <label>URL nút<input id="presenceButtonUrl" type="url" placeholder="https://nasdaq-fx.com" /></label>
+                <button class="primary-button wide" type="submit">Lưu cấu hình RPC cá nhân</button>
               </form>
+              <div class="companion-box">
+                <div><strong>Bleck Lous RPC Companion</strong><p>Phải chạy trên máy đang mở Discord Desktop. Không sử dụng user token.</p></div>
+                <div class="form-actions"><a class="secondary-button" href="/rpc_companion.py" download>Tải companion</a><button class="secondary-button" id="deviceTokenButton" type="button">Tạo lệnh kết nối</button></div>
+                <code id="deviceCommand">Kích hoạt key Extension rồi tạo lệnh kết nối.</code>
+              </div>
             </section>
           </section>
 
@@ -151,9 +153,26 @@
               <div class="access-list" id="accessList"></div>
             </section>
           </section>
+
+          <section class="view" id="invitesView" data-view="invites">
+            <section class="panel wide-panel"><div class="panel-head"><div><p>BOT INSTALLATION</p><h2>Mời bot theo server</h2></div></div><div class="invite-guild-list" id="inviteGuildList"></div></section>
+          </section>
+
+          <section class="view" id="faqView" data-view="faq">
+            <section class="panel wide-panel"><div class="panel-head"><div><p>HELP CENTER</p><h2>FAQ và commands</h2></div></div>
+              <div class="info-grid"><article><h3>Key Bot dùng làm gì?</h3><p>Kích hoạt quyền bot theo server và mở link mời Bot Tổng.</p></article><article><h3>Key Extension dùng làm gì?</h3><p>Mở cấu hình RPC cá nhân và companion local. Companion chỉ hoạt động khi Discord Desktop đang chạy.</p></article><article><h3>Voice auto-rejoin</h3><p>Bot voice chính thức lưu room đã ghim và tự kết nối lại sau disconnect hoặc restart.</p></article></div>
+              <div class="feature-grid" id="archiveFeatures"></div>
+            </section>
+          </section>
+
+          <section class="view" id="rulesView" data-view="rules">
+            <section class="panel wide-panel"><div class="panel-head"><div><p>SERVICE RULES</p><h2>Rules</h2></div></div>
+              <div class="rules-list"><article><b>01</b><div><strong>Không chia sẻ key</strong><p>Key chỉ dùng đúng loại, tài khoản và số server được cấp.</p></div></article><article><b>02</b><div><strong>Không dùng user token/self-bot</strong><p>Website và companion không yêu cầu token tài khoản Discord.</p></div></article><article><b>03</b><div><strong>Không lạm dụng bot</strong><p>Không spam, phá hoại hoặc vi phạm Discord Terms và luật của server.</p></div></article><article><b>04</b><div><strong>Quyền quản trị</strong><p>Chỉ kích hoạt bot tại server bạn có quyền Manage Server.</p></div></article></div>
+            </section>
+          </section>
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260620-voice-station"></script>
+    <script src="/app.js?v=20260622-rpc-companion"></script>
   </body>
 </html>

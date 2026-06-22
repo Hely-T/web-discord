@@ -45,6 +45,8 @@ CONFIG = {
     "discord_oauth_mode": os.getenv("DISCORD_OAUTH_MODE", "implicit").strip().lower(),
     "casino_client_id": os.getenv("CASINO_BOT_CLIENT_ID", ""),
     "general_client_id": os.getenv("GENERAL_BOT_CLIENT_ID", ""),
+    "extension_client_id": os.getenv("EXTENSION_BOT_CLIENT_ID", "") or os.getenv("DISCORD_CLIENT_ID", ""),
+    "rpc_application_id": os.getenv("RPC_APPLICATION_ID", "") or os.getenv("EXTENSION_BOT_CLIENT_ID", "") or os.getenv("DISCORD_CLIENT_ID", ""),
     "bot_permissions": os.getenv("BOT_PERMISSIONS", "8"),
     "admin_password": os.getenv("ADMIN_PASSWORD", ""),
     "contact_url": os.getenv("CONTACT_ADMIN_URL", "https://discord.com"),
@@ -328,6 +330,32 @@ def init_web_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rpc_profiles (
+                discord_user_id TEXT PRIMARY KEY,
+                activity_type TEXT NOT NULL DEFAULT 'playing',
+                details TEXT NOT NULL DEFAULT '',
+                state TEXT NOT NULL DEFAULT '',
+                large_image TEXT NOT NULL DEFAULT '',
+                large_text TEXT NOT NULL DEFAULT '',
+                button_label TEXT NOT NULL DEFAULT '',
+                button_url TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rpc_device_tokens (
+                token_hash TEXT PRIMARY KEY,
+                discord_user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TEXT,
+                revoked_at TEXT
+            )
+            """
+        )
 
 
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
@@ -536,6 +564,35 @@ def extension_access_for_user(discord_user_id: str) -> dict | None:
             (discord_user_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def rpc_profile_for_user(discord_user_id: str) -> dict:
+    with web_db() as conn:
+        row = conn.execute(
+            "SELECT activity_type, details, state, large_image, large_text, button_label, button_url, updated_at FROM rpc_profiles WHERE discord_user_id = ?",
+            (str(discord_user_id),),
+        ).fetchone()
+    return dict(row) if row else {
+        "activity_type": "playing", "details": "Bleck Lous", "state": "nasdaq-fx.com",
+        "large_image": "", "large_text": "", "button_label": "", "button_url": "", "updated_at": "",
+    }
+
+
+def rpc_device_payload(raw_token: str) -> dict | None:
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    with web_db() as conn:
+        row = conn.execute(
+            "SELECT discord_user_id FROM rpc_device_tokens WHERE token_hash = ? AND revoked_at IS NULL",
+            (token_hash,),
+        ).fetchone()
+        if not row or not extension_access_for_user(str(row["discord_user_id"])):
+            return None
+        conn.execute("UPDATE rpc_device_tokens SET last_seen_at = CURRENT_TIMESTAMP WHERE token_hash = ?", (token_hash,))
+    return {
+        "application_id": str(CONFIG["rpc_application_id"]),
+        "profile": rpc_profile_for_user(str(row["discord_user_id"])),
+        "poll_seconds": 15,
+    }
 
 
 def is_verified(discord_user_id: str) -> bool:
@@ -1072,6 +1129,11 @@ def public_summary() -> dict:
             "updated_at": now,
             "contact_url": CONFIG["contact_url"],
             "login_enabled": login_enabled(),
+            "invites": {
+                "general": invite_url(CONFIG["general_client_id"]),
+                "casino": invite_url(CONFIG["casino_client_id"]),
+                "extension": invite_url(CONFIG["extension_client_id"]),
+            },
         },
         "status": status_summary(cash, bank, casino),
         "archive_features": ARCHIVE_FEATURES,
@@ -1140,6 +1202,12 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/bot/control":
             self.handle_bot_control()
             return
+        if parsed.path == "/api/rpc/profile":
+            self.handle_rpc_profile()
+            return
+        if parsed.path == "/api/rpc/device":
+            self.handle_rpc_device()
+            return
         if parsed.path == "/api/search":
             params = parse_qs(parsed.query)
             query = params.get("q", [""])[0].strip()
@@ -1184,6 +1252,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/bot/presence":
             self.handle_bot_presence()
+            return
+        if parsed.path == "/api/rpc/profile":
+            self.handle_rpc_profile_save()
+            return
+        if parsed.path == "/api/rpc/device-token":
+            self.handle_rpc_device_token()
             return
         if parsed.path == "/api/auth/implicit":
             self.handle_implicit_auth()
@@ -1336,7 +1410,8 @@ class Handler(BaseHTTPRequestHandler):
                 "logged_in": False,
                 "login_enabled": login_enabled(),
                 "casino_invite": invite_url(CONFIG["casino_client_id"]),
-                "general_invite": "",
+                "general_invite": invite_url(CONFIG["general_client_id"]),
+                "extension_invite": invite_url(CONFIG["extension_client_id"]),
                 "guilds": [],
             }
         user = session["user"]
@@ -1348,7 +1423,8 @@ class Handler(BaseHTTPRequestHandler):
                 "banned": True,
                 "message": "Tài khoản của bạn đã bị khóa trên web.",
                 "casino_invite": invite_url(CONFIG["casino_client_id"]),
-                "general_invite": "",
+                "general_invite": invite_url(CONFIG["general_client_id"]),
+                "extension_invite": invite_url(CONFIG["extension_client_id"]),
                 "guilds": [],
             }
         claims = claims_for_guilds([str(guild.get("id", "")) for guild in session["guilds"]])
@@ -1363,6 +1439,7 @@ class Handler(BaseHTTPRequestHandler):
                     "has_bot_key": bool(claim),
                     "claim": claim,
                     "casino_invite": invite_url(CONFIG["casino_client_id"], str(guild["id"])),
+                    "extension_invite": invite_url(CONFIG["extension_client_id"], str(guild["id"])),
                     "general_invite": invite_url(CONFIG["general_client_id"], str(guild["id"]))
                     if claim
                     else "",
@@ -1383,7 +1460,8 @@ class Handler(BaseHTTPRequestHandler):
             "verified": is_verified(str(user.get("id", ""))),
             "requests": user_requests(str(user.get("id", ""))),
             "casino_invite": invite_url(CONFIG["casino_client_id"]),
-            "general_invite": "",
+            "general_invite": invite_url(CONFIG["general_client_id"]),
+            "extension_invite": invite_url(CONFIG["extension_client_id"]),
         }
 
     def bot_access(self) -> tuple[dict | None, dict, dict[str, dict]]:
@@ -1473,8 +1551,8 @@ class Handler(BaseHTTPRequestHandler):
         if not session:
             self.send_json({"ok": False, "message": "Bạn cần login Discord."})
             return
-        if user_state.get("role") != "admin" and not extension_access_for_user(str(session["user"].get("id", ""))):
-            self.send_json({"ok": False, "message": "Cần key extension để sử dụng RPC."})
+        if user_state.get("role") != "admin":
+            self.send_json({"ok": False, "message": "Chỉ admin được đổi presence chung của bot."})
             return
         try:
             result = bot_runtime.set_presence(json_body(self))
@@ -1482,6 +1560,88 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "message": str(exc)})
             return
         self.send_json(result)
+
+    def rpc_user(self) -> tuple[dict | None, str]:
+        session = self.current_session()
+        if not session:
+            return None, ""
+        user_id = str(session["user"].get("id", ""))
+        if web_user_status(user_id).get("status") == "banned":
+            return None, ""
+        return session, user_id
+
+    def handle_rpc_profile(self) -> None:
+        session, user_id = self.rpc_user()
+        if not session:
+            self.send_json({"ok": False, "message": "Bạn cần login Discord."})
+            return
+        access = extension_access_for_user(user_id)
+        self.send_json({
+            "ok": True,
+            "enabled": bool(access),
+            "application_id": str(CONFIG["rpc_application_id"]),
+            "profile": rpc_profile_for_user(user_id),
+        })
+
+    def handle_rpc_profile_save(self) -> None:
+        session, user_id = self.rpc_user()
+        if not session or not extension_access_for_user(user_id):
+            self.send_json({"ok": False, "message": "Cần key Extension còn hiệu lực để dùng RPC cá nhân."})
+            return
+        body = json_body(self)
+        activity_type = str(body.get("activity_type", "playing")).strip().lower()
+        if activity_type not in {"playing", "listening", "watching", "competing"}:
+            activity_type = "playing"
+        values = (
+            activity_type,
+            str(body.get("details", "")).strip()[:128],
+            str(body.get("state", "")).strip()[:128],
+            str(body.get("large_image", "")).strip()[:256],
+            str(body.get("large_text", "")).strip()[:128],
+            str(body.get("button_label", "")).strip()[:32],
+            str(body.get("button_url", "")).strip()[:500],
+        )
+        if values[6] and not values[6].startswith(("https://", "http://")):
+            self.send_json({"ok": False, "message": "URL nút RPC không hợp lệ."})
+            return
+        with web_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO rpc_profiles (discord_user_id, activity_type, details, state, large_image, large_text, button_label, button_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(discord_user_id) DO UPDATE SET
+                    activity_type=excluded.activity_type, details=excluded.details, state=excluded.state,
+                    large_image=excluded.large_image, large_text=excluded.large_text,
+                    button_label=excluded.button_label, button_url=excluded.button_url, updated_at=CURRENT_TIMESTAMP
+                """,
+                (user_id, *values),
+            )
+        self.send_json({"ok": True, "message": "Đã lưu cấu hình RPC cá nhân.", "profile": rpc_profile_for_user(user_id)})
+
+    def handle_rpc_device_token(self) -> None:
+        session, user_id = self.rpc_user()
+        if not session or not extension_access_for_user(user_id):
+            self.send_json({"ok": False, "message": "Cần key Extension còn hiệu lực."})
+            return
+        raw_token = "blrpc_" + secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        with web_db() as conn:
+            conn.execute("UPDATE rpc_device_tokens SET revoked_at=CURRENT_TIMESTAMP WHERE discord_user_id=? AND revoked_at IS NULL", (user_id,))
+            conn.execute("INSERT INTO rpc_device_tokens (token_hash, discord_user_id) VALUES (?, ?)", (token_hash, user_id))
+        self.send_json({
+            "ok": True,
+            "token": raw_token,
+            "command": f"python3 rpc_companion.py --server https://{CONFIG['domain']} --token {raw_token}",
+        })
+
+    def handle_rpc_device(self) -> None:
+        authorization = str(self.headers.get("Authorization", ""))
+        raw_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+        payload = rpc_device_payload(raw_token) if raw_token else None
+        if not payload:
+            self.send_json({"ok": False, "message": "RPC device token không hợp lệ hoặc key đã hết hạn."})
+            return
+        self.send_json({"ok": True, **payload})
 
     def handle_claim_key(self) -> None:
         session = self.current_session()
@@ -1719,6 +1879,8 @@ class Handler(BaseHTTPRequestHandler):
             elif action == "reset":
                 conn.execute("DELETE FROM license_claims WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM extension_claims WHERE discord_user_id = ?", (user_id,))
+                conn.execute("DELETE FROM rpc_profiles WHERE discord_user_id = ?", (user_id,))
+                conn.execute("DELETE FROM rpc_device_tokens WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM topup_requests WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM rental_requests WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM web_user_guilds WHERE discord_user_id = ?", (user_id,))
