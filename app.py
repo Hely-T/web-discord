@@ -499,6 +499,29 @@ def claims_for_user(discord_user_id: str) -> dict:
     return {str(row["guild_id"]): dict(row) for row in rows}
 
 
+def claims_for_guilds(guild_ids: list[str]) -> dict[str, dict]:
+    ids = [str(guild_id) for guild_id in guild_ids if str(guild_id)]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" for _ in ids)
+    with web_db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT c.key, c.guild_id, c.guild_name, c.claimed_at,
+                   c.discord_user_id, c.discord_username, k.status, k.expires_at
+            FROM license_claims c
+            JOIN license_keys k ON k.key = c.key
+            WHERE c.guild_id IN ({placeholders})
+              AND k.key_type = 'bot'
+              AND k.status = 'active'
+              AND (k.expires_at IS NULL OR datetime(k.expires_at) >= datetime('now'))
+            ORDER BY c.claimed_at DESC
+            """,
+            tuple(ids),
+        ).fetchall()
+    return {str(row["guild_id"]): dict(row) for row in rows}
+
+
 def extension_access_for_user(discord_user_id: str) -> dict | None:
     with web_db() as conn:
         row = conn.execute(
@@ -564,7 +587,9 @@ def key_is_expired(row: sqlite3.Row | dict) -> bool:
     return bool(value)
 
 
-def claim_license(key: str, user: dict, guild: dict | None = None) -> tuple[bool, str]:
+def claim_license(
+    key: str, user: dict, guild: dict | None = None, expected_type: str = ""
+) -> tuple[bool, str]:
     key = key.strip()
     if not key:
         return False, "Bạn chưa nhập key."
@@ -581,6 +606,10 @@ def claim_license(key: str, user: dict, guild: dict | None = None) -> tuple[bool
         if key_is_expired(license_row):
             return False, "Key đã hết hạn."
         key_type = str(license_row["key_type"] or "bot")
+        if expected_type and key_type != expected_type:
+            if expected_type == "bot":
+                return False, "Đây là key Extension. Hãy nhập key loại Bot để kích hoạt server."
+            return False, "Đây là key Bot. Hãy kích hoạt key này tại đúng server bên dưới."
         if key_type == "extension":
             count = conn.execute("SELECT COUNT(*) AS total FROM extension_claims WHERE key = ?", (key,)).fetchone()["total"]
             existing = conn.execute(
@@ -1322,7 +1351,7 @@ class Handler(BaseHTTPRequestHandler):
                 "general_invite": "",
                 "guilds": [],
             }
-        claims = claims_for_user(str(user["id"]))
+        claims = claims_for_guilds([str(guild.get("id", "")) for guild in session["guilds"]])
         extension = extension_access_for_user(str(user["id"]))
         guilds = []
         for guild in session["guilds"]:
@@ -1365,7 +1394,7 @@ class Handler(BaseHTTPRequestHandler):
         user_state = web_user_status(user_id)
         if user_state.get("status") == "banned":
             return None, user_state, {}
-        claims = claims_for_user(user_id)
+        claims = claims_for_guilds([str(guild.get("id", "")) for guild in session["guilds"]])
         is_admin = user_state.get("role") == "admin"
         allowed = {
             str(guild["id"]): guild
@@ -1380,7 +1409,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "message": "Bạn cần login Discord và tài khoản phải đang hoạt động."})
             return
         try:
-            snapshot = bot_runtime.snapshot(allowed.keys())
+            all_guilds = {str(guild["id"]): guild for guild in session["guilds"]}
+            snapshot = bot_runtime.snapshot(all_guilds.keys())
         except BotRuntimeError as exc:
             self.send_json({"ok": False, "message": str(exc), "online": False})
             return
@@ -1400,8 +1430,11 @@ class Handler(BaseHTTPRequestHandler):
                 "bot_present": guild_id in runtime_guilds,
                 "invite_url": invite_url(bot_client_id, guild_id),
             }
-            for guild_id, guild in allowed.items()
+            for guild_id, guild in all_guilds.items()
         ]
+        for guild in snapshot["guilds"]:
+            guild["licensed"] = str(guild["id"]) in allowed
+            guild["has_key"] = guild["licensed"]
         self.send_json(
             {
                 "ok": True,
@@ -1462,7 +1495,11 @@ class Handler(BaseHTTPRequestHandler):
         guild_id = str(body.get("guild_id", ""))
         key = str(body.get("key", ""))
         guild = next((item for item in session["guilds"] if str(item["id"]) == guild_id), None) if guild_id else None
-        ok, message = claim_license(key, session["user"], guild)
+        expected_type = "bot" if guild_id else "extension"
+        if guild_id and not guild:
+            self.send_json({"ok": False, "message": "Server không hợp lệ hoặc bạn không có quyền quản lý."})
+            return
+        ok, message = claim_license(key, session["user"], guild, expected_type)
         self.send_json({"ok": ok, "message": message, "me": self.current_user_payload()})
 
     def handle_check_key(self) -> None:

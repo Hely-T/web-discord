@@ -129,15 +129,29 @@ function renderChannels() {
   const missing = byId("botMissing");
   const form = byId("voiceForm");
   if (!guild) {
-    select.innerHTML = '<option value="">Không có server được cấp quyền</option>';
+    select.innerHTML = '<option value="">Không tìm thấy server quản lý</option>';
     form.classList.remove("hidden");
     missing.classList.add("hidden");
+    return;
+  }
+  if (!guild.licensed) {
+    form.classList.add("hidden");
+    missing.classList.remove("hidden");
+    byId("botMissingTitle").textContent = "Server chưa kích hoạt key Bot";
+    byId("botMissingText").textContent = "Server đã được tải. Kích hoạt key Bot để chọn phòng voice.";
+    byId("inviteButton").textContent = "Nhập key";
+    byId("inviteButton").href = "/control#access";
+    byId("inviteButton").removeAttribute("target");
     return;
   }
   if (!guild.bot_present) {
     form.classList.add("hidden");
     missing.classList.remove("hidden");
+    byId("botMissingTitle").textContent = "Bot chưa có trong server";
+    byId("botMissingText").textContent = "Thêm bot rồi làm mới danh sách phòng.";
+    byId("inviteButton").textContent = "Thêm bot";
     byId("inviteButton").href = guild.invite_url || "#";
+    byId("inviteButton").setAttribute("target", "_blank");
     return;
   }
   form.classList.remove("hidden");
@@ -187,12 +201,12 @@ function renderControl() {
   byId("botName").textContent = control?.user?.name || "Discord bot";
   byId("botLatency").textContent = online ? `${control.latency_ms || 0} ms gateway` : apiError(control, "Chưa kết nối");
   const guilds = control?.guilds || [];
-  byId("guildCount").textContent = String(guilds.length);
+  byId("guildCount").textContent = String(guilds.filter((guild) => guild.licensed).length);
   const select = byId("guildSelect");
   const selected = select.value;
   select.innerHTML = guilds.length
-    ? guilds.map((guild) => `<option value="${guild.id}">${escapeHtml(guild.name)}</option>`).join("")
-    : '<option value="">Chưa có server có key hiệu lực</option>';
+    ? guilds.map((guild) => `<option value="${guild.id}">${escapeHtml(guild.name)}${guild.licensed ? "" : " · Chưa có key"}</option>`).join("")
+    : '<option value="">Không tìm thấy server Discord do bạn quản lý</option>';
   if (guilds.some((guild) => guild.id === selected)) select.value = selected;
   renderChannels();
   renderSessions();
@@ -238,6 +252,7 @@ async function submitVoice(event) {
   event.preventDefault();
   const guildId = byId("guildSelect").value;
   const channelId = byId("channelSelect").value;
+  if (currentGuild() && !currentGuild().licensed) return setNotice("Server này chưa kích hoạt key Bot.", "warning");
   if (!guildId || !channelId) return setNotice("Hãy chọn server và phòng voice.", "warning");
   byId("joinButton").disabled = true;
   try {
@@ -301,7 +316,7 @@ async function submitKey(form) {
   try {
     const result = await request("/api/key/claim", {
       method: "POST",
-      body: JSON.stringify({ guild_id: guildId, key }),
+      body: JSON.stringify({ guild_id: guildId, key, activation_target: "bot" }),
     });
     if (!result.ok) throw new Error(apiError(result));
     state.me = result.me;
@@ -322,7 +337,7 @@ async function submitGlobalKey(event) {
   try {
     const result = await request("/api/key/claim", {
       method: "POST",
-      body: JSON.stringify({ key: new FormData(form).get("key") }),
+      body: JSON.stringify({ key: new FormData(form).get("key"), activation_target: "extension" }),
     });
     state.me = result.me;
     renderAccess();
