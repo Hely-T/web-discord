@@ -53,6 +53,7 @@
         </div>
         <form class="tool-form locked" id="keyForm">
           <input id="keyNote" placeholder="Ghi chú khách thuê" />
+          <select id="keyType"><option value="bot">Bot</option><option value="extension">Extension</option></select>
           <input id="keyAmount" type="number" min="1" max="100" value="1" />
           <input id="keyMaxGuilds" type="number" min="1" max="50" value="1" />
           <input id="keyDurationDays" type="number" min="1" max="3650" value="30" />
@@ -64,6 +65,7 @@
               <tr>
                 <th>Key</th>
                 <th>Trạng thái</th>
+                <th>Loại</th>
                 <th>Hạn</th>
                 <th>Sử dụng</th>
                 <th>User sử dụng</th>
@@ -71,7 +73,7 @@
               </tr>
             </thead>
             <tbody id="keysTable">
-              <tr><td colspan="6">Đăng nhập admin để xem dữ liệu.</td></tr>
+              <tr><td colspan="7">Đăng nhập admin để xem dữ liệu.</td></tr>
             </tbody>
           </table>
         </div>
@@ -119,6 +121,11 @@
             <div class="list" id="rentalList">Chưa có dữ liệu.</div>
           </div>
         </div>
+      </section>
+
+      <section class="panel" id="verified">
+        <div class="panel-head"><div><h2>Verified users</h2><p>Lưu độc lập với server để bot đồng bộ role khi thành viên tham gia server mới.</p></div></div>
+        <div class="list" id="verifiedList">Đăng nhập admin để xem dữ liệu.</div>
       </section>
     </main>
 

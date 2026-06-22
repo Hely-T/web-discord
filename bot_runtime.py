@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 from collections.abc import Awaitable, Callable, Iterable
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -58,6 +59,9 @@ class BotRuntime:
 
     def set_presence(self, payload: dict) -> dict:
         return self.call(lambda bot: self._set_presence(bot, payload), timeout=10.0)
+
+    def sync_verified_user(self, user_id: str) -> dict:
+        return self.call(lambda bot: self._sync_verified_user(bot, str(user_id)), timeout=15.0)
 
     @staticmethod
     def _activity_payload(activity) -> dict:
@@ -138,6 +142,25 @@ class BotRuntime:
     @staticmethod
     def _voice_cog(bot):
         return bot.get_cog("Voice")
+
+    async def _sync_verified_user(self, bot, user_id: str) -> dict:
+        if not user_id.isdigit():
+            raise BotRuntimeError("Discord user ID không hợp lệ.")
+        updated = 0
+        for guild in bot.guilds:
+            member = guild.get_member(int(user_id))
+            if member is None:
+                continue
+            configured = os.getenv("VERIFY_ROLE_ID", "").strip()
+            role = guild.get_role(int(configured)) if configured.isdigit() else None
+            role_name = os.getenv("VERIFY_ROLE_NAME", "Verified").strip() or "Verified"
+            role = role or discord.utils.get(guild.roles, name=role_name)
+            if role is None:
+                role = await guild.create_role(name=role_name, reason="Bleck Lous web verification")
+            if role not in member.roles:
+                await member.add_roles(role, reason="Verified by Bleck Lous web login")
+            updated += 1
+        return {"ok": True, "updated_guilds": updated}
 
     async def _join_voice(self, bot, guild_id: str, channel_id: str) -> dict:
         if not guild_id.isdigit() or not channel_id.isdigit():

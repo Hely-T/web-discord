@@ -83,6 +83,11 @@ function renderAccount() {
 function renderAccess() {
   const list = byId("accessList");
   const guilds = state.me?.guilds || [];
+  byId("verifiedCard").innerHTML = state.me?.verified
+    ? '<strong>✓ Đã xác minh</strong> · Hồ sơ được lưu để đồng bộ role khi bạn vào server mới.'
+    : 'Chưa xác minh. Đăng nhập web hoặc bấm Verify trong Discord.';
+  const globalForm = byId("globalKeyForm");
+  globalForm.querySelector("strong").textContent = state.me?.extension_access ? "Extension đang hoạt động" : "Kích hoạt key Extension";
   if (!guilds.length) {
     list.innerHTML = '<div class="empty-state">Không tìm thấy server Discord do bạn quản lý.</div>';
     return;
@@ -95,7 +100,8 @@ function renderAccess() {
         <small>${guild.has_key ? "Đã có quyền Voice Station" : "Chưa kích hoạt key"}</small>
       </div>
       ${guild.has_key ? `
-        <span class="access-status">ACTIVE</span>
+        <div class="access-actions"><span class="access-status">BOT ACTIVE</span>
+        ${guild.general_invite ? `<a class="secondary-button" href="${escapeHtml(guild.general_invite)}" target="_blank" rel="noreferrer">Mời bot</a>` : ""}</div>
       ` : `
         <form class="key-form" data-guild-id="${guild.id}">
           <input name="key" autocomplete="off" placeholder="Nhập key" required />
@@ -308,6 +314,25 @@ async function submitKey(form) {
   }
 }
 
+async function submitGlobalKey(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button");
+  button.disabled = true;
+  try {
+    const result = await request("/api/key/claim", {
+      method: "POST",
+      body: JSON.stringify({ key: new FormData(form).get("key") }),
+    });
+    state.me = result.me;
+    renderAccess();
+    setNotice(result.message, "success");
+    await loadControl({ quiet: true });
+  } catch (error) {
+    setNotice(error.message, "error");
+  } finally { button.disabled = false; }
+}
+
 async function boot() {
   const params = new URLSearchParams(location.search);
   const loginError = params.get("login_error") || (params.get("login") === "failed" ? "Discord OAuth không hoàn tất." : "");
@@ -339,6 +364,7 @@ byId("accessList").addEventListener("submit", (event) => {
     submitKey(event.target);
   }
 });
+byId("globalKeyForm").addEventListener("submit", submitGlobalKey);
 
 boot();
 setInterval(() => loadControl({ quiet: true }), 15000);

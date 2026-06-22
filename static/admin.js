@@ -48,12 +48,20 @@ function renderAll(data) {
   renderKeys(data.keys || []);
   renderUsers(data.users || []);
   renderRequests(data.topups || [], data.rentals || []);
+  renderVerified(data.verified || []);
+}
+
+function renderVerified(users) {
+  byId("verifiedList").innerHTML = users.length ? users.map((user) => `
+    <div class="item"><strong>${escapeHtml(user.username || user.discord_user_id)}</strong>
+    <div class="muted">${escapeHtml(user.discord_user_id)} · ${escapeHtml(user.source)} · ${escapeHtml(user.verified_at)}</div></div>
+  `).join("") : "Chưa có thành viên xác minh.";
 }
 
 function renderKeys(keys) {
   const tbody = byId("keysTable");
   if (!keys.length) {
-    tbody.innerHTML = `<tr><td colspan="6">Chưa có key.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7">Chưa có key.</td></tr>`;
     return;
   }
   tbody.innerHTML = keys.map((key) => `
@@ -63,6 +71,7 @@ function renderKeys(keys) {
         <div class="muted">${escapeHtml(key.note || "không ghi chú")}</div>
       </td>
       <td>${escapeHtml(key.status)}</td>
+      <td><strong>${escapeHtml(key.key_type || "bot")}</strong></td>
       <td>
         ${escapeHtml(key.expires_at || "không hạn")}
         <div class="muted">${money(key.duration_days)} ngày</div>
@@ -152,6 +161,7 @@ async function createKey(event) {
   event.preventDefault();
   const data = await postJson("/api/admin/keys", {
     note: byId("keyNote").value,
+    key_type: byId("keyType").value,
     amount: byId("keyAmount").value,
     max_guilds: byId("keyMaxGuilds").value,
     duration_days: byId("keyDurationDays").value,

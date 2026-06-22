@@ -8,6 +8,8 @@ Web điều khiển bot voice đang chạy cùng process. Trang chính là giao 
 - Hiển thị room đang kết nối và room đang chờ reconnect.
 - Admin web có thể đổi Presence/RPC chung của bot.
 - User kích hoạt key cho server ngay trong mục `Quyền truy cập`.
+- Key có hai loại: `bot` mở Voice Room/mời bot theo server; `extension` mở RPC theo tài khoản.
+- Đăng nhập web tự lưu user là verified. Bot có `/verify`, `/verify-panel`, `/verify-setup`, `/verify-sync` và tự cấp lại role khi user đã xác minh tham gia server mới. Chạy `/verify-setup confirm:true` trong kênh xác minh để ẩn các kênh còn lại khỏi `@everyone`.
 - Admin panel riêng ở `/admin`, không dùng layout public; dùng để tạo/gia hạn/khóa key, xem user sử dụng key, ban/reset user, cấp quyền user/admin và xem yêu cầu nạp/thuê.
 - Dữ liệu bot đọc SQLite hiện có ở chế độ read-only.
 - Source archive cũ đã được ghép vào `archive_bot/`; `main.py` là file chính mới, chạy web dashboard và bot voice trong cùng process.
@@ -153,6 +155,9 @@ Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
 Environment=BOT_PREFIX=$
+Environment=VERIFY_ROLE_NAME=Verified
+# Optional nếu muốn dùng một role có sẵn (phù hợp khi bot chỉ chạy một server):
+# Environment=VERIFY_ROLE_ID=123456789012345678
 Environment=VOICE_STATE_PATH=/opt/bleck-lous-web/archive_bot/data/voice_state.json
 # Optional. Leave empty/commented for web-only mode.
 # Use the Bot token from Discord Developer Portal to run the voice bot too.

@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 
 import app as web_app
@@ -69,7 +70,43 @@ def discord_intents():
         intents.message_content = True
     if hasattr(intents, "voice_states"):
         intents.voice_states = True
+    if hasattr(intents, "members"):
+        intents.members = True
     return intents
+
+
+async def verified_role(guild: discord.Guild) -> discord.Role:
+    configured = os.getenv("VERIFY_ROLE_ID", "").strip()
+    role = guild.get_role(int(configured)) if configured.isdigit() else None
+    role_name = os.getenv("VERIFY_ROLE_NAME", "Verified").strip() or "Verified"
+    role = role or discord.utils.get(guild.roles, name=role_name)
+    if role is None:
+        role = await guild.create_role(name=role_name, reason="Bleck Lous verification")
+    return role
+
+
+async def grant_verified(member: discord.Member, source: str = "discord") -> tuple[bool, str]:
+    web_app.verify_user(str(member.id), str(member), source)
+    try:
+        role = await verified_role(member.guild)
+        if role not in member.roles:
+            await member.add_roles(role, reason="Bleck Lous verified user")
+    except discord.Forbidden:
+        return False, "Đã lưu xác minh nhưng bot thiếu Manage Roles hoặc role bot đang nằm quá thấp."
+    return True, "Xác minh thành công. Bạn đã được cấp quyền truy cập server."
+
+
+class VerifyView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Verify / Xác minh", style=discord.ButtonStyle.success, custom_id="bleck_lous:verify:v1", emoji="✅")
+    async def verify_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message("Hãy xác minh trong server Discord.", ephemeral=True)
+            return
+        ok, message = await grant_verified(interaction.user)
+        await interaction.response.send_message(message, ephemeral=True)
 
 
 class BleckLousBot(commands.Bot):
@@ -87,7 +124,13 @@ class BleckLousBot(commands.Bot):
 
     async def setup_hook(self):
         bot_runtime.attach(self, asyncio.get_running_loop())
+        self.add_view(VerifyView())
+        register_verify_commands(self)
         await self.load_archive_cogs()
+        try:
+            await self.tree.sync()
+        except Exception as exc:
+            logger.warning("Không sync được slash commands: %s", exc)
 
     async def close(self):
         bot_runtime.detach(self)
@@ -133,6 +176,72 @@ class BleckLousBot(commands.Bot):
             return
         if before.channel and not after.channel:
             logger.warning("Bot bị disconnect từ %s", before.channel.name)
+
+    async def on_member_join(self, member: discord.Member):
+        if web_app.is_verified(str(member.id)):
+            ok, message = await grant_verified(member, "sync")
+            if not ok:
+                logger.warning("Không đồng bộ verified role cho %s: %s", member, message)
+
+
+def register_verify_commands(bot: BleckLousBot) -> None:
+    @bot.tree.command(name="verify", description="Xác minh để mở quyền truy cập server")
+    async def verify(interaction: discord.Interaction):
+        await interaction.response.send_message(
+            "Bấm nút bên dưới để xác minh. Trạng thái này được lưu để dùng lại ở server mới.",
+            view=VerifyView(), ephemeral=True,
+        )
+
+    @bot.tree.command(name="verify-panel", description="Đăng bảng xác minh cho thành viên")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def verify_panel(interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="Xác minh thành viên",
+            description="Bấm **Verify / Xác minh** để mở quyền xem các kênh.",
+            color=discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, view=VerifyView())
+
+    @bot.tree.command(name="verify-setup", description="Ẩn các kênh cho tới khi thành viên xác minh")
+    @app_commands.describe(confirm="Chọn true để xác nhận thay đổi quyền View Channel")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def verify_setup(interaction: discord.Interaction, confirm: bool = False):
+        if not interaction.guild or not interaction.channel:
+            await interaction.response.send_message("Lệnh này chỉ dùng trong server.", ephemeral=True)
+            return
+        if not confirm:
+            await interaction.response.send_message(
+                "Lệnh này sẽ ẩn toàn bộ kênh khỏi @everyone, trừ kênh hiện tại, và mở chúng cho role Verified. Chạy lại với `confirm: true`.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        role = await verified_role(interaction.guild)
+        changed = 0
+        for channel in interaction.guild.channels:
+            if channel.id == interaction.channel.id:
+                await channel.set_permissions(interaction.guild.default_role, view_channel=True, reason="Verification entry channel")
+            else:
+                await channel.set_permissions(interaction.guild.default_role, view_channel=False, reason="Verification gate")
+                await channel.set_permissions(role, view_channel=True, reason="Verified access")
+            changed += 1
+        await interaction.followup.send(
+            f"Đã bật verification gate cho {changed} kênh. Hãy dùng `/verify-panel` trong kênh hiện tại.", ephemeral=True
+        )
+
+    @bot.tree.command(name="verify-sync", description="Đồng bộ role cho toàn bộ user đã xác minh")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def verify_sync(interaction: discord.Interaction):
+        if not interaction.guild:
+            await interaction.response.send_message("Lệnh này chỉ dùng trong server.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        updated = 0
+        async for member in interaction.guild.fetch_members(limit=None):
+            if web_app.is_verified(str(member.id)):
+                ok, _ = await grant_verified(member, "sync")
+                updated += int(ok)
+        await interaction.followup.send(f"Đã đồng bộ role Verified cho {updated} thành viên.", ephemeral=True)
 
 
 def register_reload_command(bot: BleckLousBot) -> None:

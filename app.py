@@ -256,6 +256,7 @@ def init_web_db() -> None:
         ensure_column(conn, "web_users", "reset_at", "TEXT")
         ensure_column(conn, "license_keys", "duration_days", "INTEGER NOT NULL DEFAULT 30")
         ensure_column(conn, "license_keys", "expires_at", "TEXT")
+        ensure_column(conn, "license_keys", "key_type", "TEXT NOT NULL DEFAULT 'bot'")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS topup_requests (
@@ -300,6 +301,30 @@ def init_web_db() -> None:
                 claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(key, guild_id),
                 FOREIGN KEY(key) REFERENCES license_keys(key)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS extension_claims (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT NOT NULL,
+                discord_user_id TEXT NOT NULL,
+                discord_username TEXT NOT NULL,
+                claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(key, discord_user_id),
+                FOREIGN KEY(key) REFERENCES license_keys(key)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS verified_users (
+                discord_user_id TEXT PRIMARY KEY,
+                username TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT 'discord',
+                verified_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -395,16 +420,33 @@ def post_form(url: str, data: dict) -> dict:
     request = urllib.request.Request(url, data=encoded, method="POST")
     request.add_header("Content-Type", "application/x-www-form-urlencoded")
     request.add_header("Accept", "application/json")
+    request.add_header("User-Agent", "BleckLousVoiceStation/1.0 (https://nasdaq-fx.com)")
     with urllib.request.urlopen(request, timeout=15) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+class DiscordAPIError(RuntimeError):
+    def __init__(self, status: int, path: str, message: str = "") -> None:
+        self.status = int(status)
+        self.path = path
+        super().__init__(message or f"Discord API trả về HTTP {status} tại {path}")
 
 
 def discord_get(path: str, token: str) -> dict | list:
-    request = urllib.request.Request(f"https://discord.com/api{path}")
+    request = urllib.request.Request(f"https://discord.com/api/v10{path}")
     request.add_header("Authorization", f"Bearer {token}")
     request.add_header("Accept", "application/json")
-    with urllib.request.urlopen(request, timeout=15) as response:
-        return json.loads(response.read().decode("utf-8"))
+    request.add_header("User-Agent", "BleckLousVoiceStation/1.0 (https://nasdaq-fx.com)")
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            payload = json.loads(exc.read().decode("utf-8"))
+            detail = str(payload.get("message", "")) if isinstance(payload, dict) else ""
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            detail = ""
+        raise DiscordAPIError(exc.code, path, detail) from exc
 
 
 def invite_url(client_id: str, guild_id: str = "") -> str:
@@ -457,6 +499,46 @@ def claims_for_user(discord_user_id: str) -> dict:
     return {str(row["guild_id"]): dict(row) for row in rows}
 
 
+def extension_access_for_user(discord_user_id: str) -> dict | None:
+    with web_db() as conn:
+        row = conn.execute(
+            """
+            SELECT c.key, c.claimed_at, k.expires_at
+            FROM extension_claims c
+            JOIN license_keys k ON k.key = c.key
+            WHERE c.discord_user_id = ? AND k.status = 'active'
+              AND (k.expires_at IS NULL OR datetime(k.expires_at) >= datetime('now'))
+            ORDER BY c.claimed_at DESC LIMIT 1
+            """,
+            (discord_user_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def is_verified(discord_user_id: str) -> bool:
+    with web_db() as conn:
+        return conn.execute(
+            "SELECT 1 FROM verified_users WHERE discord_user_id = ?", (str(discord_user_id),)
+        ).fetchone() is not None
+
+
+def verify_user(discord_user_id: str, username: str = "", source: str = "discord") -> None:
+    if not str(discord_user_id):
+        return
+    with web_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO verified_users (discord_user_id, username, source)
+            VALUES (?, ?, ?)
+            ON CONFLICT(discord_user_id) DO UPDATE SET
+                username = excluded.username,
+                source = CASE WHEN verified_users.source = 'web' THEN 'web' ELSE excluded.source END,
+                last_seen_at = CURRENT_TIMESTAMP
+            """,
+            (str(discord_user_id), str(username), str(source)),
+        )
+
+
 def web_user_status(discord_user_id: str) -> dict:
     with web_db() as conn:
         row = conn.execute(
@@ -482,7 +564,7 @@ def key_is_expired(row: sqlite3.Row | dict) -> bool:
     return bool(value)
 
 
-def claim_license(key: str, user: dict, guild: dict) -> tuple[bool, str]:
+def claim_license(key: str, user: dict, guild: dict | None = None) -> tuple[bool, str]:
     key = key.strip()
     if not key:
         return False, "Bạn chưa nhập key."
@@ -491,17 +573,30 @@ def claim_license(key: str, user: dict, guild: dict) -> tuple[bool, str]:
         return False, "Tài khoản của bạn đã bị khóa trên web."
     with web_db() as conn:
         license_row = conn.execute(
-            "SELECT key, status, max_guilds, expires_at FROM license_keys WHERE key = ?",
+            "SELECT key, status, max_guilds, expires_at, key_type FROM license_keys WHERE key = ?",
             (key,),
         ).fetchone()
         if not license_row or license_row["status"] != "active":
             return False, "Key không tồn tại hoặc đã bị khóa."
         if key_is_expired(license_row):
             return False, "Key đã hết hạn."
-        count = conn.execute(
-            "SELECT COUNT(*) AS total FROM license_claims WHERE key = ?",
-            (key,),
-        ).fetchone()["total"]
+        key_type = str(license_row["key_type"] or "bot")
+        if key_type == "extension":
+            count = conn.execute("SELECT COUNT(*) AS total FROM extension_claims WHERE key = ?", (key,)).fetchone()["total"]
+            existing = conn.execute(
+                "SELECT id FROM extension_claims WHERE key = ? AND discord_user_id = ?",
+                (key, str(user["id"])),
+            ).fetchone()
+            if not existing and int(count) >= int(license_row["max_guilds"]):
+                return False, "Key extension đã dùng hết số tài khoản cho phép."
+            conn.execute(
+                "INSERT OR IGNORE INTO extension_claims (key, discord_user_id, discord_username) VALUES (?, ?, ?)",
+                (key, str(user["id"]), str(user.get("username", ""))),
+            )
+            return True, "Kích hoạt key extension thành công. RPC đã được mở."
+        if not guild:
+            return False, "Key bot cần chọn một server để kích hoạt."
+        count = conn.execute("SELECT COUNT(*) AS total FROM license_claims WHERE key = ?", (key,)).fetchone()["total"]
         existing = conn.execute(
             """
             SELECT id FROM license_claims
@@ -533,12 +628,14 @@ def admin_keys() -> list[dict]:
         rows = conn.execute(
             """
             SELECT
-                k.key, k.status, k.note, k.max_guilds, k.duration_days,
+                k.key, k.key_type, k.status, k.note, k.max_guilds, k.duration_days,
                 k.expires_at, k.created_at, k.revoked_at,
-                COUNT(c.id) AS used_guilds,
-                GROUP_CONCAT(c.discord_username || ' (' || c.guild_name || ')', ', ') AS used_by
+                COUNT(DISTINCT c.id) + COUNT(DISTINCT e.id) AS used_guilds,
+                COALESCE(GROUP_CONCAT(DISTINCT c.discord_username || ' (' || c.guild_name || ')'),
+                         GROUP_CONCAT(DISTINCT e.discord_username)) AS used_by
             FROM license_keys k
             LEFT JOIN license_claims c ON c.key = k.key
+            LEFT JOIN extension_claims e ON e.key = k.key
             GROUP BY k.key
             ORDER BY k.created_at DESC
             LIMIT 200
@@ -557,6 +654,9 @@ def admin_snapshot() -> dict:
             ORDER BY last_login_at DESC
             LIMIT 100
             """
+        ).fetchall()
+        verified = conn.execute(
+            "SELECT discord_user_id, username, source, verified_at, last_seen_at FROM verified_users ORDER BY verified_at DESC LIMIT 500"
         ).fetchall()
         topups = conn.execute(
             """
@@ -579,6 +679,7 @@ def admin_snapshot() -> dict:
         "users": [dict(row) for row in users],
         "topups": [dict(row) for row in topups],
         "rentals": [dict(row) for row in rentals],
+        "verified": [dict(row) for row in verified],
     }
 
 
@@ -624,6 +725,12 @@ def save_web_login(user: dict, guilds: list[dict]) -> None:
                     1 if guild.get("manageable") else 0,
                 ),
             )
+    verify_user(discord_user_id, str(user.get("username", "")), "web")
+    try:
+        bot_runtime.sync_verified_user(discord_user_id)
+    except BotRuntimeError:
+        # The durable DB record is enough; on_member_join or /verify-sync applies the role later.
+        pass
 
 
 def save_web_session(sid: str, user: dict, guilds: list[dict]) -> None:
@@ -720,20 +827,20 @@ def key_public_status(key: str) -> tuple[bool, str, str]:
         return False, "Bạn chưa nhập key.", ""
     with web_db() as conn:
         row = conn.execute(
-            "SELECT key, status, max_guilds, expires_at FROM license_keys WHERE key = ?",
+            "SELECT key, status, max_guilds, expires_at, key_type FROM license_keys WHERE key = ?",
             (key,),
         ).fetchone()
         if not row or row["status"] != "active":
             return False, "Key không tồn tại hoặc đã bị khóa.", ""
         if key_is_expired(row):
             return False, "Key đã hết hạn.", ""
-        used = conn.execute(
-            "SELECT COUNT(*) AS total FROM license_claims WHERE key = ?",
-            (key,),
-        ).fetchone()["total"]
+        claim_table = "extension_claims" if row["key_type"] == "extension" else "license_claims"
+        used = conn.execute(f"SELECT COUNT(*) AS total FROM {claim_table} WHERE key = ?", (key,)).fetchone()["total"]
     if int(used) >= int(row["max_guilds"]):
         return False, "Key đã dùng hết số server cho phép.", ""
-    return True, "Key hợp lệ. Bạn có thể invite bot tổng.", invite_url(CONFIG["general_client_id"])
+    if row["key_type"] == "extension":
+        return True, "Key extension hợp lệ. Hãy đăng nhập web để kích hoạt RPC.", ""
+    return True, "Key bot hợp lệ. Bạn có thể mời bot.", invite_url(CONFIG["general_client_id"])
 
 
 def config_count(name: str, fallback: int) -> int:
@@ -1088,12 +1195,6 @@ class Handler(BaseHTTPRequestHandler):
         self.redirect("https://discord.com/oauth2/authorize?" + urllib.parse.urlencode(params))
 
     def discord_identity(self, access_token: str) -> tuple[dict, list[dict]]:
-        authorization = discord_get("/oauth2/@me", access_token)
-        if not isinstance(authorization, dict):
-            raise ValueError("Discord trả về authorization không hợp lệ.")
-        application_id = str(authorization.get("application", {}).get("id", ""))
-        if application_id != str(CONFIG["discord_client_id"]):
-            raise ValueError("OAuth token thuộc Discord Application khác.")
         user = discord_get("/users/@me", access_token)
         raw_guilds = discord_get("/users/@me/guilds", access_token)
         if not isinstance(user, dict) or not isinstance(raw_guilds, list):
@@ -1120,9 +1221,17 @@ class Handler(BaseHTTPRequestHandler):
         try:
             user, guilds = self.discord_identity(access_token)
             sid, cookies = self.create_web_session(user, guilds)
-        except (KeyError, ValueError, json.JSONDecodeError, sqlite3.Error, OSError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+        except (KeyError, ValueError, json.JSONDecodeError, sqlite3.Error, OSError, urllib.error.URLError, DiscordAPIError, TimeoutError) as exc:
             print(f"[oauth] implicit login failed: {type(exc).__name__}: {exc}")
-            self.send_json({"ok": False, "message": "Không đọc được tài khoản Discord. Hãy đăng nhập lại."})
+            if isinstance(exc, DiscordAPIError) and exc.status == 401:
+                message = "Discord access token không hợp lệ hoặc đã hết hạn. Hãy đăng nhập lại."
+            elif isinstance(exc, DiscordAPIError) and exc.status == 403:
+                message = "Discord từ chối quyền truy cập. Kiểm tra OAuth scope identify + guilds."
+            elif isinstance(exc, DiscordAPIError) and exc.path == "/users/@me/guilds":
+                message = "Không đọc được danh sách server Discord. OAuth cần scope guilds."
+            else:
+                message = "Không kết nối được Discord API. Hãy thử đăng nhập lại."
+            self.send_json({"ok": False, "message": message})
             return
         next_view = str(state_data.get("next", "control"))
         print(f"[oauth] implicit login ok user={user.get('id', '')} sid={sid[:8]} next={next_view}")
@@ -1157,7 +1266,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             access_token = token["access_token"]
             user, guilds = self.discord_identity(access_token)
-        except (KeyError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+        except (KeyError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, DiscordAPIError, TimeoutError) as exc:
             print(f"[oauth] callback failed: {type(exc).__name__}: {exc}")
             if isinstance(exc, urllib.error.HTTPError) and exc.code == 401:
                 message = "OAuth Client ID hoặc Client Secret không đúng cùng một Discord Application."
@@ -1214,6 +1323,7 @@ class Handler(BaseHTTPRequestHandler):
                 "guilds": [],
             }
         claims = claims_for_user(str(user["id"]))
+        extension = extension_access_for_user(str(user["id"]))
         guilds = []
         for guild in session["guilds"]:
             claim = claims.get(str(guild["id"]))
@@ -1221,6 +1331,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     **guild,
                     "has_key": bool(claim),
+                    "has_bot_key": bool(claim),
                     "claim": claim,
                     "casino_invite": invite_url(CONFIG["casino_client_id"], str(guild["id"])),
                     "general_invite": invite_url(CONFIG["general_client_id"], str(guild["id"]))
@@ -1239,6 +1350,8 @@ class Handler(BaseHTTPRequestHandler):
                 "status": user_state.get("status", "active"),
             },
             "guilds": guilds,
+            "extension_access": extension,
+            "verified": is_verified(str(user.get("id", ""))),
             "requests": user_requests(str(user.get("id", ""))),
             "casino_invite": invite_url(CONFIG["casino_client_id"]),
             "general_invite": "",
@@ -1272,7 +1385,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"ok": False, "message": str(exc), "online": False})
             return
         runtime_guilds = {str(item["id"]): item for item in snapshot.get("guilds", [])}
-        bot_client_id = str(snapshot.get("user", {}).get("id", ""))
+        bot_client_id = str(snapshot.get("user", {}).get("id", "")) or str(CONFIG["general_client_id"])
         snapshot["guilds"] = [
             {
                 **runtime_guilds.get(
@@ -1293,7 +1406,8 @@ class Handler(BaseHTTPRequestHandler):
             {
                 "ok": True,
                 **snapshot,
-                "can_manage_presence": user_state.get("role") == "admin",
+                "can_manage_presence": user_state.get("role") == "admin"
+                or bool(extension_access_for_user(str(session["user"].get("id", "")))),
             }
         )
 
@@ -1326,8 +1440,8 @@ class Handler(BaseHTTPRequestHandler):
         if not session:
             self.send_json({"ok": False, "message": "Bạn cần login Discord."})
             return
-        if user_state.get("role") != "admin":
-            self.send_json({"ok": False, "message": "Chỉ admin được đổi presence/RPC chung của bot."})
+        if user_state.get("role") != "admin" and not extension_access_for_user(str(session["user"].get("id", ""))):
+            self.send_json({"ok": False, "message": "Cần key extension để sử dụng RPC."})
             return
         try:
             result = bot_runtime.set_presence(json_body(self))
@@ -1347,10 +1461,7 @@ class Handler(BaseHTTPRequestHandler):
         body = json_body(self)
         guild_id = str(body.get("guild_id", ""))
         key = str(body.get("key", ""))
-        guild = next((item for item in session["guilds"] if str(item["id"]) == guild_id), None)
-        if not guild:
-            self.send_json({"ok": False, "message": "Server không hợp lệ hoặc bạn không có quyền quản lý."})
-            return
+        guild = next((item for item in session["guilds"] if str(item["id"]) == guild_id), None) if guild_id else None
         ok, message = claim_license(key, session["user"], guild)
         self.send_json({"ok": ok, "message": message, "me": self.current_user_payload()})
 
@@ -1461,6 +1572,10 @@ class Handler(BaseHTTPRequestHandler):
         amount = max(1, min(int_value(body.get("amount"), 1), 100))
         max_guilds = max(1, min(int_value(body.get("max_guilds"), 1), 50))
         duration_days = max(1, min(int_value(body.get("duration_days"), 30), 3650))
+        key_type = str(body.get("key_type", "bot")).strip().lower()
+        if key_type not in {"bot", "extension"}:
+            self.send_json({"ok": False, "message": "Loại key không hợp lệ."})
+            return
         note = str(body.get("note", "")).strip()
         created = []
         with web_db() as conn:
@@ -1468,10 +1583,10 @@ class Handler(BaseHTTPRequestHandler):
                 key = "BL-" + secrets.token_urlsafe(18).replace("_", "").replace("-", "").upper()[:24]
                 conn.execute(
                     """
-                    INSERT INTO license_keys (key, note, max_guilds, duration_days, expires_at)
-                    VALUES (?, ?, ?, ?, datetime('now', ?))
+                    INSERT INTO license_keys (key, key_type, note, max_guilds, duration_days, expires_at)
+                    VALUES (?, ?, ?, ?, ?, datetime('now', ?))
                     """,
-                    (key, note, max_guilds, duration_days, f"+{duration_days} days"),
+                    (key, key_type, note, max_guilds, duration_days, f"+{duration_days} days"),
                 )
                 created.append(key)
         self.send_json({"ok": True, "created": created, **admin_snapshot()})
@@ -1566,6 +1681,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             elif action == "reset":
                 conn.execute("DELETE FROM license_claims WHERE discord_user_id = ?", (user_id,))
+                conn.execute("DELETE FROM extension_claims WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM topup_requests WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM rental_requests WHERE discord_user_id = ?", (user_id,))
                 conn.execute("DELETE FROM web_user_guilds WHERE discord_user_id = ?", (user_id,))

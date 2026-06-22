@@ -114,6 +114,13 @@ input:focus, select:focus { border-color: var(--cyan); }
 .presence-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
 .presence-form .wide { grid-column: 1 / -1; }
 .access-list { display: grid; gap: 8px; }
+.global-key-form { margin-bottom: 12px; padding: 14px; display: grid; grid-template-columns: minmax(180px,1fr) minmax(220px,1fr) auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 5px; background: #11161c; }
+.global-key-form strong, .global-key-form small { display: block; }
+.global-key-form small { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.global-key-form input { min-height: 40px; }
+.verified-card { margin-bottom: 12px; padding: 12px 14px; border-left: 3px solid var(--green); background: #11161c; color: var(--muted); font-size: 12px; }
+.verified-card strong { color: var(--green); }
+.access-actions { display:flex; align-items:center; gap:8px; justify-self:end; }
 .access-row { min-height: 72px; display: grid; grid-template-columns: 40px minmax(160px, 1fr) minmax(260px, auto); align-items: center; gap: 13px; padding: 12px; border: 1px solid var(--line); border-radius: 5px; background: #11161c; }
 .access-row.active { border-left: 3px solid var(--green); }
 .server-avatar { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px; background: #28313b; color: var(--cyan); font-size: 11px; font-weight: 900; }
@@ -160,6 +167,7 @@ input:focus, select:focus { border-color: var(--cyan); }
   .presence-form .wide { grid-column: auto; }
   .access-row { grid-template-columns: 40px minmax(0, 1fr); }
   .access-status, .key-form { grid-column: 1 / -1; justify-self: stretch; }
+  .global-key-form { grid-template-columns: 1fr; }
   .access-status { padding-left: 53px; }
   .session-row { grid-template-columns: 10px minmax(0, 1fr); }
   .session-meta { grid-column: 2; text-align: left; }
