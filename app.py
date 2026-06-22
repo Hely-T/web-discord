@@ -42,6 +42,7 @@ CONFIG = {
     "discord_client_id": os.getenv("DISCORD_CLIENT_ID", ""),
     "discord_client_secret": os.getenv("DISCORD_CLIENT_SECRET", ""),
     "discord_redirect_uri": os.getenv("DISCORD_REDIRECT_URI", ""),
+    "discord_oauth_mode": os.getenv("DISCORD_OAUTH_MODE", "implicit").strip().lower(),
     "casino_client_id": os.getenv("CASINO_BOT_CLIENT_ID", ""),
     "general_client_id": os.getenv("GENERAL_BOT_CLIENT_ID", ""),
     "bot_permissions": os.getenv("BOT_PERMISSIONS", "8"),
@@ -945,11 +946,10 @@ def public_summary() -> dict:
 
 
 def login_enabled() -> bool:
-    return bool(
-        CONFIG["discord_client_id"]
-        and CONFIG["discord_client_secret"]
-        and CONFIG["discord_redirect_uri"]
-    )
+    required = [CONFIG["discord_client_id"], CONFIG["discord_redirect_uri"]]
+    if CONFIG["discord_oauth_mode"] == "code":
+        required.append(CONFIG["discord_client_secret"])
+    return all(required)
 
 
 def oauth_next_url(next_view: str) -> str:
@@ -983,7 +983,10 @@ class Handler(BaseHTTPRequestHandler):
             self.handle_login(parsed.query)
             return
         if parsed.path == "/auth/callback":
-            self.handle_callback(parsed.query)
+            if CONFIG["discord_oauth_mode"] == "implicit":
+                self.send_file(STATIC_DIR / "oauth-callback.html", send_body=send_body)
+            else:
+                self.handle_callback(parsed.query)
             return
         if parsed.path == "/auth/logout":
             delete_web_session(self.cookie("bl_session"))
@@ -1046,6 +1049,9 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/api/bot/presence":
             self.handle_bot_presence()
             return
+        if parsed.path == "/api/auth/implicit":
+            self.handle_implicit_auth()
+            return
         if parsed.path == "/api/admin/login":
             self.handle_admin_login()
             return
@@ -1075,11 +1081,52 @@ class Handler(BaseHTTPRequestHandler):
         params = {
             "client_id": CONFIG["discord_client_id"],
             "redirect_uri": CONFIG["discord_redirect_uri"],
-            "response_type": "code",
+            "response_type": "token" if CONFIG["discord_oauth_mode"] == "implicit" else "code",
             "scope": "identify guilds",
             "state": state,
         }
         self.redirect("https://discord.com/oauth2/authorize?" + urllib.parse.urlencode(params))
+
+    def discord_identity(self, access_token: str) -> tuple[dict, list[dict]]:
+        authorization = discord_get("/oauth2/@me", access_token)
+        if not isinstance(authorization, dict):
+            raise ValueError("Discord trả về authorization không hợp lệ.")
+        application_id = str(authorization.get("application", {}).get("id", ""))
+        if application_id != str(CONFIG["discord_client_id"]):
+            raise ValueError("OAuth token thuộc Discord Application khác.")
+        user = discord_get("/users/@me", access_token)
+        raw_guilds = discord_get("/users/@me/guilds", access_token)
+        if not isinstance(user, dict) or not isinstance(raw_guilds, list):
+            raise ValueError("Discord trả về dữ liệu tài khoản không hợp lệ.")
+        return user, owned_guilds(raw_guilds)
+
+    def create_web_session(self, user: dict, guilds: list[dict]) -> tuple[str, list[str]]:
+        save_web_login(user, guilds)
+        sid = secrets.token_urlsafe(32)
+        SESSIONS[sid] = {"user": user, "guilds": guilds, "created_at": time.time()}
+        save_web_session(sid, user, guilds)
+        return sid, self.cookie_values("bl_session", sid, http_only=True)
+
+    def handle_implicit_auth(self) -> None:
+        if CONFIG["discord_oauth_mode"] != "implicit" or not login_enabled():
+            self.send_json({"ok": False, "message": "Implicit OAuth chưa được bật."})
+            return
+        body = json_body(self)
+        access_token = str(body.get("access_token", "")).strip()
+        state_data = read_oauth_state(str(body.get("state", "")).strip())
+        if not access_token or not state_data:
+            self.send_json({"ok": False, "message": "Phiên Discord OAuth không hợp lệ hoặc đã hết hạn."})
+            return
+        try:
+            user, guilds = self.discord_identity(access_token)
+            sid, cookies = self.create_web_session(user, guilds)
+        except (KeyError, ValueError, json.JSONDecodeError, sqlite3.Error, OSError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
+            print(f"[oauth] implicit login failed: {type(exc).__name__}: {exc}")
+            self.send_json({"ok": False, "message": "Không đọc được tài khoản Discord. Hãy đăng nhập lại."})
+            return
+        next_view = str(state_data.get("next", "control"))
+        print(f"[oauth] implicit login ok user={user.get('id', '')} sid={sid[:8]} next={next_view}")
+        self.send_json({"ok": True, "next": oauth_next_url(next_view)}, cookies=cookies)
 
     def handle_callback(self, query: str) -> None:
         params = parse_qs(query)
@@ -1109,8 +1156,7 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             access_token = token["access_token"]
-            user = discord_get("/users/@me", access_token)
-            guilds = owned_guilds(discord_get("/users/@me/guilds", access_token))
+            user, guilds = self.discord_identity(access_token)
         except (KeyError, ValueError, json.JSONDecodeError, urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as exc:
             print(f"[oauth] callback failed: {type(exc).__name__}: {exc}")
             if isinstance(exc, urllib.error.HTTPError) and exc.code == 401:
@@ -1121,10 +1167,7 @@ class Handler(BaseHTTPRequestHandler):
                 message = "Không thể kết nối Discord OAuth. Kiểm tra cấu hình và thử lại."
             self.redirect(oauth_error_url(message))
             return
-        save_web_login(user, guilds)
-        sid = secrets.token_urlsafe(32)
-        SESSIONS[sid] = {"user": user, "guilds": guilds, "created_at": time.time()}
-        save_web_session(sid, user, guilds)
+        sid, cookies = self.create_web_session(user, guilds)
         next_view = str(state_data.get("next", "dashboard"))
         print(
             "[oauth] login ok "
@@ -1133,7 +1176,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.redirect(
             oauth_next_url(next_view),
-            cookies=self.cookie_values("bl_session", sid, http_only=True),
+            cookies=cookies,
         )
 
     def current_session(self) -> dict | None:

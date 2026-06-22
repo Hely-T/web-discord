@@ -111,6 +111,7 @@ https://nasdaq-fx.com/auth/callback
 DISCORD_CLIENT_ID=client_id_cua_app
 DISCORD_CLIENT_SECRET=client_secret_cua_app
 DISCORD_REDIRECT_URI=https://nasdaq-fx.com/auth/callback
+DISCORD_OAUTH_MODE=implicit
 CASINO_BOT_CLIENT_ID=client_id_bot_casino
 GENERAL_BOT_CLIENT_ID=client_id_bot_tong
 ADMIN_PASSWORD=mat_khau_admin_manh
@@ -121,7 +122,7 @@ GENERAL_SERVER_COUNT=0
 
 `CASINO_BOT_CLIENT_ID` và `GENERAL_BOT_CLIENT_ID` là Application/Client ID của từng bot. Web tự tạo invite URL theo từng server user đang quản lý.
 
-`DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` và redirect URL phải thuộc cùng một Discord Application. Nên dùng chính Application của voice bot cho cả OAuth và bot token để tránh cấu hình nhầm. Redirect URL trên Portal phải khớp tuyệt đối, kể cả `https`, domain và path. Source archive cũ không có web login; `config.json` của nó chỉ đăng nhập bot bằng token, nên Voice Station dùng OAuth2 chính thức cho người dùng web.
+`implicit` là chế độ mặc định: Discord trả một access token ngắn hạn với đúng scope `identify guilds`; web dùng token đó một lần để tạo session nội bộ rồi không lưu lại. Chế độ này không phụ thuộc `DISCORD_CLIENT_SECRET`, tránh lỗi secret thuộc nhầm Application. Nếu muốn dùng Authorization Code Grant truyền thống, đặt `DISCORD_OAUTH_MODE=code`; khi đó Client ID và Client Secret phải thuộc cùng một Application. Redirect URL trên Portal phải khớp tuyệt đối, kể cả `https`, domain và path. Source archive cũ không có web login; `config.json` của nó chỉ đăng nhập bot bằng token.
 
 Nếu sau này bot ghi được số server thật vào API/database thì có thể thay phần status. Hiện tại web dùng `GENERAL_SERVER_COUNT`, `CASINO_SERVER_COUNT`; bot tổng còn có số server đã kích hoạt key làm fallback.
 
@@ -144,6 +145,7 @@ Environment=WEB_DB_PATH=/opt/discord-bots/main-bot/database/web-dashboard/web.sq
 Environment=DISCORD_CLIENT_ID=your_web_client_id
 Environment=DISCORD_CLIENT_SECRET=your_web_client_secret
 Environment=DISCORD_REDIRECT_URI=https://nasdaq-fx.com/auth/callback
+Environment=DISCORD_OAUTH_MODE=implicit
 Environment=CASINO_BOT_CLIENT_ID=casino_bot_client_id
 Environment=GENERAL_BOT_CLIENT_ID=general_bot_client_id
 Environment=ADMIN_PASSWORD=change_this_password

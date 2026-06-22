@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Đang đăng nhập Discord</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #0b0e12; color: #f4f7fa; }
+      main { width: min(430px, calc(100% - 40px)); padding: 28px; border: 1px solid #29313c; border-radius: 7px; background: #151a21; }
+      span { color: #42d392; font-size: 11px; font-weight: 800; }
+      h1 { margin: 12px 0 8px; font-size: 22px; }
+      p { margin: 0; color: #929da9; line-height: 1.6; }
+      a { display: none; margin-top: 18px; color: #51c7dc; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span>DISCORD OAUTH2</span>
+      <h1 id="title">Đang hoàn tất đăng nhập</h1>
+      <p id="message">Voice Station đang xác minh tài khoản Discord của bạn.</p>
+      <a id="retry" href="/auth/login?next=control">Thử đăng nhập lại</a>
+    </main>
+    <script>
+      const title = document.getElementById("title");
+      const message = document.getElementById("message");
+      const retry = document.getElementById("retry");
+
+      function fail(text) {
+        title.textContent = "Đăng nhập chưa hoàn tất";
+        message.textContent = text;
+        retry.style.display = "inline-block";
+      }
+
+      async function finish() {
+        const params = new URLSearchParams(location.hash.slice(1));
+        const error = params.get("error_description") || params.get("error");
+        const accessToken = params.get("access_token");
+        const state = params.get("state");
+        history.replaceState(null, "", location.pathname);
+        if (error) return fail(`Discord từ chối đăng nhập: ${error}`);
+        if (!accessToken || !state) return fail("Discord không trả về phiên đăng nhập hợp lệ.");
+        try {
+          const response = await fetch("/api/auth/implicit", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: accessToken, state }),
+          });
+          const payload = await response.json();
+          if (!payload.ok) throw new Error(payload.message || "Không thể đăng nhập.");
+          location.replace(payload.next || "/control");
+        } catch (error) {
+          fail(error.message || "Không thể kết nối Voice Station.");
+        }
+      }
+
+      finish();
+    </script>
+  </body>
+</html>
