@@ -171,14 +171,20 @@ function renderChannels() {
   const select = byId("channelSelect");
   const missing = byId("botMissing");
   const form = byId("voiceForm");
+  const channelField = byId("channelField");
+  const actions = byId("voiceActions");
   if (!guild) {
     select.innerHTML = '<option value="">Không tìm thấy server quản lý</option>';
     form.classList.remove("hidden");
+    channelField.classList.add("hidden");
+    actions.classList.add("hidden");
     missing.classList.add("hidden");
     return;
   }
   if (!guild.licensed) {
-    form.classList.add("hidden");
+    form.classList.remove("hidden");
+    channelField.classList.add("hidden");
+    actions.classList.add("hidden");
     missing.classList.remove("hidden");
     byId("botMissingTitle").textContent = "Server chưa kích hoạt key Bot";
     byId("botMissingText").textContent = "Server đã được tải. Kích hoạt key Bot để chọn phòng voice.";
@@ -188,16 +194,20 @@ function renderChannels() {
     return;
   }
   if (!guild.bot_present) {
-    form.classList.add("hidden");
+    form.classList.remove("hidden");
+    channelField.classList.add("hidden");
+    actions.classList.add("hidden");
     missing.classList.remove("hidden");
     byId("botMissingTitle").textContent = "Bot chưa có trong server";
     byId("botMissingText").textContent = "Thêm bot rồi làm mới danh sách phòng.";
-    byId("inviteButton").textContent = "Thêm bot";
+    byId("inviteButton").textContent = "Chọn server để thêm bot";
     byId("inviteButton").href = guild.invite_url || "#";
     byId("inviteButton").setAttribute("target", "_blank");
     return;
   }
   form.classList.remove("hidden");
+  channelField.classList.remove("hidden");
+  actions.classList.remove("hidden");
   missing.classList.add("hidden");
   const channels = guild.channels || [];
   select.innerHTML = channels.length
@@ -243,12 +253,15 @@ function renderControl() {
   byId("runtimeText").textContent = online ? "Bot online" : "Bot offline";
   byId("botName").textContent = control?.user?.name || "Discord bot";
   byId("botLatency").textContent = online ? `${control.latency_ms || 0} ms gateway` : apiError(control, "Chưa kết nối");
-  const guilds = control?.guilds || [];
+  const guilds = [...(control?.guilds || [])].sort((a, b) => Number(b.bot_present) - Number(a.bot_present) || Number(b.licensed) - Number(a.licensed) || a.name.localeCompare(b.name));
   byId("guildCount").textContent = String(guilds.filter((guild) => guild.licensed).length);
   const select = byId("guildSelect");
   const selected = select.value;
   select.innerHTML = guilds.length
-    ? guilds.map((guild) => `<option value="${guild.id}">${escapeHtml(guild.name)}${guild.licensed ? "" : " · Chưa có key"}</option>`).join("")
+    ? guilds.map((guild) => {
+      const status = !guild.licensed ? "Chưa có key" : (guild.bot_present ? "Sẵn sàng" : "Chưa thêm bot");
+      return `<option value="${guild.id}">${escapeHtml(guild.name)} · ${status}</option>`;
+    }).join("")
     : '<option value="">Không tìm thấy server Discord do bạn quản lý</option>';
   if (guilds.some((guild) => guild.id === selected)) select.value = selected;
   renderChannels();

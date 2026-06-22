@@ -1537,7 +1537,7 @@ class Handler(BaseHTTPRequestHandler):
                     },
                 ),
                 "bot_present": guild_id in runtime_guilds,
-                "invite_url": invite_url(bot_client_id, guild_id),
+                "invite_url": invite_url(bot_client_id),
             }
             for guild_id, guild in all_guilds.items()
         ]

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Bleck Lous Voice Station</title>
-    <link rel="stylesheet" href="/styles.css?v=20260622-public-status" />
+    <link rel="stylesheet" href="/styles.css?v=20260622-voice-selector" />
   </head>
   <body>
     <div class="app-shell">
@@ -85,10 +85,10 @@
                   <label>Server
                     <select id="guildSelect" required></select>
                   </label>
-                  <label>Phòng voice
+                  <label id="channelField">Phòng voice
                     <select id="channelSelect" required></select>
                   </label>
-                  <div class="form-actions">
+                  <div class="form-actions" id="voiceActions">
                     <button class="primary-button" id="joinButton" type="submit">Treo room</button>
                     <button class="secondary-button" id="leaveButton" type="button">Rời room</button>
                   </div>
@@ -181,6 +181,6 @@
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260622-public-status"></script>
+    <script src="/app.js?v=20260622-voice-selector"></script>
   </body>
 </html>
