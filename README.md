@@ -167,6 +167,7 @@ Environment=ADMIN_PASSWORD=change_this_password
 Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
+Environment=EXTENSION_SERVER_COUNT=0
 Environment=BOT_PREFIX=$
 Environment=VERIFY_ROLE_NAME=Verified
 # Optional nếu muốn dùng một role có sẵn (phù hợp khi bot chỉ chạy một server):

@@ -52,6 +52,7 @@ CONFIG = {
     "contact_url": os.getenv("CONTACT_ADMIN_URL", "https://discord.com"),
     "casino_server_count": os.getenv("CASINO_SERVER_COUNT", ""),
     "general_server_count": os.getenv("GENERAL_SERVER_COUNT", ""),
+    "extension_server_count": os.getenv("EXTENSION_SERVER_COUNT", ""),
     "cookie_domain": os.getenv("COOKIE_DOMAIN", ""),
 }
 
@@ -943,6 +944,7 @@ def uptime_seconds() -> int:
 def status_summary(cash: dict, bank: dict, casino: dict) -> list[dict]:
     general_servers = config_count("general_server_count", licensed_server_count())
     casino_servers = config_count("casino_server_count", 0)
+    extension = extension_runtime_summary()
     return [
         {
             "name": "Casino Bot",
@@ -963,11 +965,11 @@ def status_summary(cash: dict, bank: dict, casino: dict) -> list[dict]:
             "accent": "red",
         },
         {
-            "name": "Payment/Key",
-            "state": "operational" if bank["available"] else "manual mode",
-            "online": bank["available"],
-            "servers": general_servers,
-            "users": bank["paid"] + bank["pending"],
+            "name": "Extension Bot",
+            "state": "operational" if extension["online"] else "offline",
+            "online": extension["online"],
+            "servers": extension["servers"],
+            "users": extension["users"],
             "uptime_seconds": uptime_seconds(),
             "accent": "pink",
         },
@@ -980,6 +982,35 @@ def licensed_server_count() -> int:
             "SELECT COUNT(DISTINCT guild_id) AS total FROM license_claims"
         ).fetchone()
     return int_value(row["total"] if row else 0)
+
+
+def active_extension_user_count() -> int:
+    with web_db() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT c.discord_user_id) AS total
+            FROM extension_claims c JOIN license_keys k ON k.key=c.key
+            WHERE k.status='active' AND (k.expires_at IS NULL OR datetime(k.expires_at)>=datetime('now'))
+            """
+        ).fetchone()
+    return int_value(row["total"] if row else 0)
+
+
+def extension_runtime_summary() -> dict:
+    fallback = {
+        "online": False,
+        "servers": config_count("extension_server_count", 0),
+        "users": active_extension_user_count(),
+    }
+    try:
+        live = bot_runtime.public_status()
+        return {
+            "online": bool(live.get("online")),
+            "servers": int_value(live.get("servers"), fallback["servers"]),
+            "users": int_value(live.get("users"), fallback["users"]),
+        }
+    except BotRuntimeError:
+        return fallback
 
 
 def cash_summary() -> dict:

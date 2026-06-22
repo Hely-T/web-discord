@@ -81,6 +81,7 @@ button:disabled, input:disabled, select:disabled { opacity: .45; cursor: not-all
 .workspace { padding: 28px clamp(20px, 4vw, 54px) 56px; }
 .view { display: none; }
 .view.active { display: block; }
+.login-gate.view.active { display: grid; }
 .metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .metrics-grid article { min-height: 116px; padding: 22px; display: flex; flex-direction: column; justify-content: center; border-right: 1px solid var(--line); }
 .metrics-grid article:last-child { border-right: 0; }
@@ -153,6 +154,17 @@ input:focus, select:focus { border-color: var(--cyan); }
 .command-row code { color: var(--cyan); }
 .rules-list article { padding: 16px; display: grid; grid-template-columns: 36px 1fr; gap: 12px; border: 1px solid var(--line); border-radius: 5px; background: #11161c; }
 .rules-list b { color: var(--green); }
+.public-status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.public-status-card { padding: 18px; border: 1px solid var(--line); border-radius: 6px; background: #11161c; }
+.status-card-head { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 9px; }
+.status-card-head i { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+.public-status-card.online .status-card-head i { background: var(--green); box-shadow: 0 0 0 4px rgba(66,211,146,.1); }
+.status-card-head span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.status-numbers { margin-top: 18px; display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.status-numbers div { padding: 10px; border-left: 1px solid var(--line); }
+.status-numbers b, .status-numbers small { display: block; }
+.status-numbers b { font-size: 18px; }
+.status-numbers small { margin-top: 4px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
@@ -161,7 +173,7 @@ input:focus, select:focus { border-color: var(--cyan); }
   .brand > span:last-child, .nav-item > span:last-child, .sidebar-foot span { display: none; }
   .nav-item { justify-content: center; padding: 8px; }
   .sidebar-foot { text-align: center; padding-left: 0; padding-right: 0; }
-  .content-grid, .info-grid { grid-template-columns: 1fr; }
+  .content-grid, .info-grid, .public-status-grid { grid-template-columns: 1fr; }
   .login-gate { grid-template-columns: 1fr; align-content: center; }
 }
 
@@ -169,7 +181,7 @@ input:focus, select:focus { border-color: var(--cyan); }
   .app-shell { display: block; padding-bottom: 66px; }
   .sidebar { position: fixed; inset: auto 0 0; z-index: 30; width: auto; height: 66px; padding: 8px 12px; display: block; border: 0; border-top: 1px solid var(--line); }
   .sidebar .brand, .sidebar-foot { display: none; }
-  .sidebar nav { height: 100%; display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+  .sidebar nav { height: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(64px, 1fr); gap: 3px; overflow-x: auto; }
   .nav-item { min-height: 48px; flex-direction: column; gap: 2px; font-size: 9px; }
   .nav-item > span:last-child { display: block; }
   .nav-icon { width: 20px; height: 20px; border: 0; }

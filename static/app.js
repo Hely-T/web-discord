@@ -50,23 +50,23 @@ function showSection(section) {
     button.classList.toggle("active", button.dataset.section === section);
   });
   const titles = {
+    public: "Mời bot",
     voice: "Treo phòng voice",
     presence: "RPC cá nhân",
     access: "Quyền truy cập",
     invites: "Mời bot",
     faq: "FAQ và Commands",
     rules: "Rules",
+    status: "Status và uptime",
   };
   byId("pageTitle").textContent = titles[section] || titles.voice;
-  history.replaceState(null, "", section === "voice" ? "/control" : `/control#${section}`);
+  const base = state.me?.logged_in ? "/control" : "/";
+  history.replaceState(null, "", section === "public" ? "/" : (section === "voice" ? "/control" : `${base}#${section}`));
 }
 
 function renderAccount() {
   const loggedIn = Boolean(state.me?.logged_in);
-  byId("loginGate").classList.toggle("hidden", loggedIn);
-  byId("workspace").classList.toggle("hidden", !loggedIn);
-  byId("sideNav").classList.toggle("hidden", !loggedIn);
-  byId("sidebarFoot").classList.toggle("hidden", !loggedIn);
+  document.querySelectorAll("[data-private]").forEach((item) => item.classList.toggle("hidden", !loggedIn));
   const account = byId("accountButton");
   if (!loggedIn) {
     const enabled = state.me?.login_enabled !== false;
@@ -86,6 +86,29 @@ function renderAccount() {
   account.href = "/auth/logout";
   const avatar = avatarUrl(user);
   if (avatar) account.style.setProperty("--avatar", `url(${avatar})`);
+}
+
+function duration(seconds) {
+  const total = Number(seconds || 0);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return days ? `${days}d ${hours}h` : (hours ? `${hours}h ${minutes}m` : `${minutes}m`);
+}
+
+function renderPublicStatus(summary) {
+  const items = summary?.status || [];
+  byId("statusUpdated").textContent = `Cập nhật ${new Date((summary?.app?.updated_at || 0) * 1000).toLocaleString("vi-VN")}`;
+  byId("publicStatusGrid").innerHTML = items.map((item) => `
+    <article class="public-status-card ${item.online ? "online" : ""}"><div class="status-card-head"><i></i><strong>${escapeHtml(item.name)}</strong><span>${item.online ? "ONLINE" : "OFFLINE"}</span></div>
+      <div class="status-numbers"><div><b>${Number(item.users || 0).toLocaleString("vi-VN")}</b><small>Users</small></div><div><b>${Number(item.servers || 0).toLocaleString("vi-VN")}</b><small>Servers</small></div><div><b>${duration(item.uptime_seconds)}</b><small>Uptime</small></div></div>
+    </article>
+  `).join("");
+  const extension = items.find((item) => item.name === "Extension Bot");
+  if (extension) {
+    byId("runtimeBadge").classList.toggle("online", Boolean(extension.online));
+    byId("runtimeText").textContent = extension.online ? "Extension online" : "Extension offline";
+  }
 }
 
 function renderInvites() {
@@ -398,20 +421,20 @@ async function boot() {
   }
   try {
     await loadMe();
+    const [summary, features] = await Promise.all([request("/api/summary"), request("/api/archive/features")]);
+    renderPublicStatus(summary);
+    renderArchiveFeatures(features);
     if (state.me.logged_in) {
       await Promise.all([loadControl(), loadRpc()]);
-      const features = await request("/api/archive/features");
-      renderArchiveFeatures(features);
     }
   } catch (error) {
     setNotice(error.message, "error");
   }
   const initial = location.hash.slice(1);
   if (state.me?.logged_in) {
-    showSection(["voice", "presence", "access", "invites", "faq", "rules"].includes(initial) ? initial : "voice");
+    showSection(["public", "voice", "presence", "access", "invites", "faq", "rules", "status"].includes(initial) ? initial : "voice");
   } else {
-    byId("pageTitle").textContent = "Mời bot";
-    history.replaceState(null, "", "/");
+    showSection(["faq", "rules", "status"].includes(initial) ? initial : "public");
   }
 }
 

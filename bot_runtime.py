@@ -63,6 +63,9 @@ class BotRuntime:
     def sync_verified_user(self, user_id: str) -> dict:
         return self.call(lambda bot: self._sync_verified_user(bot, str(user_id)), timeout=15.0)
 
+    def public_status(self) -> dict:
+        return self.call(self._public_status, timeout=3.0)
+
     @staticmethod
     def _activity_payload(activity) -> dict:
         if activity is None:
@@ -142,6 +145,10 @@ class BotRuntime:
     @staticmethod
     def _voice_cog(bot):
         return bot.get_cog("Voice")
+
+    async def _public_status(self, bot) -> dict:
+        users = {member.id for guild in bot.guilds for member in guild.members if not member.bot}
+        return {"online": bool(bot.is_ready()), "servers": len(bot.guilds), "users": len(users)}
 
     async def _sync_verified_user(self, bot, user_id: str) -> dict:
         if not user_id.isdigit():

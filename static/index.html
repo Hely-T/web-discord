@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>Bleck Lous Voice Station</title>
-    <link rel="stylesheet" href="/styles.css?v=20260622-rpc-companion" />
+    <link rel="stylesheet" href="/styles.css?v=20260622-public-status" />
   </head>
   <body>
     <div class="app-shell">
@@ -15,18 +15,20 @@
           <span><strong>Bleck Lous</strong><small>Voice Station</small></span>
         </a>
         <nav id="sideNav" aria-label="Điều hướng">
-          <button class="nav-item active" type="button" data-section="voice">
+          <button class="nav-item active" type="button" data-section="public"><span class="nav-icon">+</span><span>Mời bot</span></button>
+          <button class="nav-item" type="button" data-section="voice" data-private>
             <span class="nav-icon">V</span><span>Voice rooms</span>
           </button>
-          <button class="nav-item" type="button" data-section="presence">
+          <button class="nav-item" type="button" data-section="presence" data-private>
             <span class="nav-icon">R</span><span>RPC presence</span>
           </button>
-          <button class="nav-item" type="button" data-section="access">
+          <button class="nav-item" type="button" data-section="access" data-private>
             <span class="nav-icon">K</span><span>Quyền truy cập</span>
           </button>
-          <button class="nav-item" type="button" data-section="invites"><span class="nav-icon">+</span><span>Mời bot</span></button>
+          <button class="nav-item" type="button" data-section="invites" data-private><span class="nav-icon">S</span><span>Mời theo server</span></button>
           <button class="nav-item" type="button" data-section="faq"><span class="nav-icon">?</span><span>FAQ</span></button>
           <button class="nav-item" type="button" data-section="rules"><span class="nav-icon">!</span><span>Rules</span></button>
+          <button class="nav-item" type="button" data-section="status"><span class="nav-icon">●</span><span>Status</span></button>
         </nav>
         <div class="sidebar-foot" id="sidebarFoot">
           <a href="/admin">Admin</a>
@@ -50,7 +52,7 @@
 
         <div class="notice hidden" id="notice" role="status"></div>
 
-        <section class="login-gate" id="loginGate">
+        <section class="login-gate view active" id="loginGate" data-view="public">
           <div class="login-copy">
             <span class="status-chip">BLECK LOUS BOTS</span>
             <h2>Mời bot vào server của bạn</h2>
@@ -64,7 +66,7 @@
           </div>
         </section>
 
-        <div class="workspace hidden" id="workspace">
+        <div class="workspace" id="workspace">
           <section class="view active" id="voiceView" data-view="voice">
             <div class="metrics-grid">
               <article><span>Bot</span><strong id="botName">Discord bot</strong><small id="botLatency">Chưa kết nối</small></article>
@@ -170,9 +172,15 @@
               <div class="rules-list"><article><b>01</b><div><strong>Không chia sẻ key</strong><p>Key chỉ dùng đúng loại, tài khoản và số server được cấp.</p></div></article><article><b>02</b><div><strong>Không dùng user token/self-bot</strong><p>Website và companion không yêu cầu token tài khoản Discord.</p></div></article><article><b>03</b><div><strong>Không lạm dụng bot</strong><p>Không spam, phá hoại hoặc vi phạm Discord Terms và luật của server.</p></div></article><article><b>04</b><div><strong>Quyền quản trị</strong><p>Chỉ kích hoạt bot tại server bạn có quyền Manage Server.</p></div></article></div>
             </section>
           </section>
+
+          <section class="view" id="statusView" data-view="status">
+            <section class="panel wide-panel"><div class="panel-head"><div><p>LIVE SERVICE</p><h2>Status và uptime</h2></div><span class="permission-label" id="statusUpdated">Đang tải...</span></div>
+              <div class="public-status-grid" id="publicStatusGrid"></div>
+            </section>
+          </section>
         </div>
       </main>
     </div>
-    <script src="/app.js?v=20260622-rpc-companion"></script>
+    <script src="/app.js?v=20260622-public-status"></script>
   </body>
 </html>
