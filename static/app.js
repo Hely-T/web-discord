@@ -377,7 +377,7 @@ async function submitPresence(event) {
 async function createDeviceToken() {
   try {
     const result = await request("/api/rpc/device-token", { method: "POST", body: JSON.stringify({}) });
-    byId("deviceCommand").textContent = `curl -O https://${location.host}/rpc_companion.py\n${result.command}`;
+    byId("deviceCommand").textContent = `macOS / Linux:\n${result.commands?.mac || result.command}\n\nWindows PowerShell:\n${result.commands?.windows || result.command}`;
     setNotice("Đã tạo token companion mới. Token cũ đã bị thu hồi.", "success");
   } catch (error) { setNotice(error.message, "error"); }
 }

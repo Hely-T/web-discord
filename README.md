@@ -66,7 +66,7 @@ Nếu chưa cấu hình token bot, `main.py` chỉ chạy web. Nếu có token, 
 
 1. Kích hoạt key loại `extension` trong Quyền truy cập.
 2. Vào RPC presence, lưu profile và bấm **Tạo lệnh kết nối**.
-3. Tải `rpc_companion.py`, mở Discord Desktop rồi chạy lệnh web cung cấp.
+3. Tải `rpc_companion.py`, mở Discord Desktop rồi chạy lệnh macOS/Linux hoặc Windows PowerShell do web cung cấp.
 4. Companion cập nhật cấu hình qua local Discord IPC; tạo token mới sẽ thu hồi token cũ.
 
 Nếu chạy trên máy đang có source bot:

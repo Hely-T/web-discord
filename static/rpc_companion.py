@@ -8,13 +8,40 @@ import glob
 import json
 import os
 import socket
+import ssl
 import struct
 import time
 import urllib.request
 import uuid
+from typing import BinaryIO
+
+
+def tls_context() -> ssl.SSLContext:
+    candidates: list[str] = []
+    try:
+        import certifi  # Included by the official python.org macOS installer.
+        candidates.append(certifi.where())
+    except ImportError:
+        pass
+    default_cafile = ssl.get_default_verify_paths().openssl_cafile
+    if default_cafile:
+        candidates.append(default_cafile)
+    candidates.extend([
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/certs/ca-certificates.crt",
+    ])
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return ssl.create_default_context(cafile=path)
+    return ssl.create_default_context()
+
+
+TLS_CONTEXT = tls_context()
 
 
 def ipc_paths() -> list[str]:
+    if os.name == "nt":
+        return [rf"\\.\pipe\discord-ipc-{index}" for index in range(10)]
     roots = [os.getenv("TMPDIR", ""), "/tmp", "/var/tmp"]
     paths: list[str] = []
     for root in roots:
@@ -28,7 +55,27 @@ def frame(opcode: int, payload: dict) -> bytes:
     return struct.pack("<II", opcode, len(body)) + body
 
 
-def receive(sock: socket.socket) -> dict:
+class IPCConnection:
+    def __init__(self, transport: socket.socket | BinaryIO):
+        self.transport = transport
+
+    def sendall(self, data: bytes) -> None:
+        if isinstance(self.transport, socket.socket):
+            self.transport.sendall(data)
+        else:
+            self.transport.write(data)
+            self.transport.flush()
+
+    def recv(self, size: int) -> bytes:
+        if isinstance(self.transport, socket.socket):
+            return self.transport.recv(size)
+        return self.transport.read(size)
+
+    def close(self) -> None:
+        self.transport.close()
+
+
+def receive(sock: IPCConnection) -> dict:
     header = sock.recv(8)
     if len(header) != 8:
         raise ConnectionError("Discord IPC closed")
@@ -42,19 +89,26 @@ def receive(sock: socket.socket) -> dict:
     return json.loads(chunks.decode("utf-8"))
 
 
-def connect_discord(client_id: str) -> socket.socket:
+def connect_discord(client_id: str) -> IPCConnection:
     last_error: Exception | None = None
     for path in ipc_paths():
+        connection: IPCConnection | None = None
         try:
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.settimeout(8)
-            sock.connect(path)
-            sock.sendall(frame(0, {"v": 1, "client_id": str(client_id)}))
-            ready = receive(sock)
+            if os.name == "nt":
+                connection = IPCConnection(open(path, "r+b", buffering=0))
+            else:
+                unix_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                unix_socket.settimeout(8)
+                unix_socket.connect(path)
+                connection = IPCConnection(unix_socket)
+            connection.sendall(frame(0, {"v": 1, "client_id": str(client_id)}))
+            ready = receive(connection)
             if ready.get("evt") != "READY":
                 raise ConnectionError(str(ready))
-            return sock
+            return connection
         except (OSError, ValueError, ConnectionError) as exc:
+            if connection:
+                connection.close()
             last_error = exc
     raise ConnectionError(f"Không tìm thấy Discord Desktop IPC: {last_error or 'Discord chưa chạy'}")
 
@@ -63,7 +117,7 @@ def fetch_config(server: str, token: str) -> dict:
     request = urllib.request.Request(server.rstrip("/") + "/api/rpc/device")
     request.add_header("Authorization", f"Bearer {token}")
     request.add_header("User-Agent", "BleckLousRPCCompanion/1.0")
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=15, context=TLS_CONTEXT) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not payload.get("ok"):
         raise RuntimeError(payload.get("message", "RPC API error"))
@@ -91,7 +145,7 @@ def activity(profile: dict) -> dict:
     return {key: value for key, value in result.items() if value is not None}
 
 
-def update(sock: socket.socket, profile: dict) -> None:
+def update(sock: IPCConnection, profile: dict) -> None:
     payload = {
         "cmd": "SET_ACTIVITY",
         "args": {"pid": os.getpid(), "activity": activity(profile)},
@@ -104,7 +158,7 @@ def update(sock: socket.socket, profile: dict) -> None:
 
 
 def run(server: str, token: str) -> None:
-    sock: socket.socket | None = None
+    sock: IPCConnection | None = None
     current_client = ""
     last_profile = ""
     print("Bleck Lous RPC Companion đang chạy. Nhấn Ctrl+C để dừng.")
@@ -139,7 +193,11 @@ def run(server: str, token: str) -> None:
             if sock:
                 sock.close()
             sock = None
-            time.sleep(10)
+            try:
+                time.sleep(10)
+            except KeyboardInterrupt:
+                print("\nĐã dừng RPC.")
+                return
 
 
 if __name__ == "__main__":

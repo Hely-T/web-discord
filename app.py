@@ -1663,6 +1663,10 @@ class Handler(BaseHTTPRequestHandler):
             "ok": True,
             "token": raw_token,
             "command": f"python3 rpc_companion.py --server https://{CONFIG['domain']} --token {raw_token}",
+            "commands": {
+                "mac": f"curl -O https://{CONFIG['domain']}/rpc_companion.py\npython3 rpc_companion.py --server https://{CONFIG['domain']} --token {raw_token}",
+                "windows": f"Invoke-WebRequest https://{CONFIG['domain']}/rpc_companion.py -OutFile rpc_companion.py\npy rpc_companion.py --server https://{CONFIG['domain']} --token {raw_token}",
+            },
         })
 
     def handle_rpc_device(self) -> None:
