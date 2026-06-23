@@ -185,7 +185,7 @@ class BotRuntime:
         voice_cog = self._voice_cog(bot)
         if voice_cog:
             voice_cog.set_auto_reconnect(guild.id, channel.id)
-            connected = await voice_cog.ensure_voice_connection(guild.id, channel.id)
+            connected = await voice_cog.ensure_voice_connection(guild.id, channel.id, force=True)
         else:
             voice_client = guild.voice_client
             if voice_client and voice_client.is_connected() and voice_client.channel.id != channel.id:
@@ -195,7 +195,7 @@ class BotRuntime:
                     await voice_client.disconnect(force=True)
                 await channel.connect(
                     timeout=20.0,
-                    reconnect=True,
+                    reconnect=False,
                     self_mute=True,
                     self_deaf=False,
                 )

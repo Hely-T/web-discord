@@ -46,6 +46,8 @@ CONFIG = {
     "casino_client_id": os.getenv("CASINO_BOT_CLIENT_ID", ""),
     "general_client_id": os.getenv("GENERAL_BOT_CLIENT_ID", ""),
     "extension_client_id": os.getenv("EXTENSION_BOT_CLIENT_ID", "") or os.getenv("DISCORD_CLIENT_ID", ""),
+    "casino_bot_token": os.getenv("CASINO_BOT_TOKEN", "") or os.getenv("CASINO_DISCORD_TOKEN", ""),
+    "general_bot_token": os.getenv("GENERAL_BOT_TOKEN", "") or os.getenv("BOT_TONG_TOKEN", "") or os.getenv("GENERAL_DISCORD_TOKEN", ""),
     "rpc_application_id": os.getenv("RPC_APPLICATION_ID", "") or os.getenv("EXTENSION_BOT_CLIENT_ID", "") or os.getenv("DISCORD_CLIENT_ID", ""),
     "bot_permissions": os.getenv("BOT_PERMISSIONS", "8"),
     "admin_password": os.getenv("ADMIN_PASSWORD", ""),
@@ -127,6 +129,8 @@ ARCHIVE_FEATURES = {
 SESSIONS: dict[str, dict] = {}
 ADMIN_SESSIONS: set[str] = set()
 DB_WARNINGS: dict[str, str] = {}
+GUILD_COUNT_CACHE: dict[str, tuple[float, int]] = {}
+DISCORD_GUILD_COUNT_CACHE: dict[str, tuple[float, int]] = {}
 
 
 def auth_secret() -> bytes:
@@ -930,11 +934,110 @@ def key_public_status(key: str) -> tuple[bool, str, str]:
     return True, "Key bot hợp lệ. Bạn có thể mời bot.", invite_url(CONFIG["general_client_id"])
 
 
+def quote_identifier(identifier: str) -> str:
+    return '"' + str(identifier).replace('"', '""') + '"'
+
+
+def database_guild_count(path: str, ttl_seconds: int = 60) -> int:
+    path = str(path or "").strip()
+    if not path:
+        return 0
+    cache_key = f"db:{path}"
+    cached = GUILD_COUNT_CACHE.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < ttl_seconds:
+        return cached[1]
+
+    conn = connect_readonly(path)
+    if not conn:
+        return 0
+
+    best = 0
+    try:
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        for table_row in tables:
+            table = str(table_row["name"])
+            if table.startswith("sqlite_"):
+                continue
+            try:
+                columns = conn.execute(f"PRAGMA table_info({quote_identifier(table)})").fetchall()
+            except sqlite3.Error:
+                continue
+            for column_row in columns:
+                column = str(column_row["name"])
+                normalized = column.lower().replace("_", "")
+                if normalized not in {"guildid", "serverid"}:
+                    continue
+                quoted_table = quote_identifier(table)
+                quoted_column = quote_identifier(column)
+                try:
+                    row = conn.execute(
+                        f"""
+                        SELECT COUNT(DISTINCT CAST({quoted_column} AS TEXT)) AS total
+                        FROM {quoted_table}
+                        WHERE {quoted_column} IS NOT NULL
+                          AND TRIM(CAST({quoted_column} AS TEXT)) != ''
+                        """
+                    ).fetchone()
+                    best = max(best, int_value(row["total"] if row else 0))
+                except sqlite3.Error:
+                    continue
+    finally:
+        conn.close()
+
+    GUILD_COUNT_CACHE[cache_key] = (now, best)
+    return best
+
+
+def discord_bot_guild_count(token: str, cache_key: str, ttl_seconds: int = 300) -> int:
+    token = str(token or "").strip()
+    if not token:
+        return 0
+    token_key = hashlib.sha256(token.encode("utf-8")).hexdigest()[:16]
+    cache_name = f"discord:{cache_key}:{token_key}"
+    cached = DISCORD_GUILD_COUNT_CACHE.get(cache_name)
+    now = time.time()
+    if cached and now - cached[0] < ttl_seconds:
+        return cached[1]
+
+    total = 0
+    after = ""
+    try:
+        while True:
+            query = {"limit": "200"}
+            if after:
+                query["after"] = after
+            url = "https://discord.com/api/v10/users/@me/guilds?" + urllib.parse.urlencode(query)
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bot {token}",
+                    "User-Agent": "BleckLousWeb/1.0",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=4) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if not isinstance(payload, list) or not payload:
+                break
+            total += len(payload)
+            if len(payload) < 200:
+                break
+            after = str(payload[-1].get("id", ""))
+            if not after:
+                break
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError, ValueError):
+        total = 0
+
+    DISCORD_GUILD_COUNT_CACHE[cache_name] = (now, total)
+    return total
+
+
 def config_count(name: str, fallback: int) -> int:
     raw = str(CONFIG.get(name, "")).strip()
     if not raw:
         return fallback
-    return int_value(raw, fallback)
+    value = int_value(raw, fallback)
+    return value if value > 0 else fallback
 
 
 def uptime_seconds() -> int:
@@ -942,8 +1045,21 @@ def uptime_seconds() -> int:
 
 
 def status_summary(cash: dict, bank: dict, casino: dict) -> list[dict]:
-    general_servers = config_count("general_server_count", licensed_server_count())
-    casino_servers = config_count("casino_server_count", 0)
+    general_servers = config_count(
+        "general_server_count",
+        max(
+            licensed_server_count(),
+            database_guild_count(CONFIG["cash_db"]),
+            discord_bot_guild_count(CONFIG["general_bot_token"], "general"),
+        ),
+    )
+    casino_servers = config_count(
+        "casino_server_count",
+        max(
+            database_guild_count(CONFIG["casino_db"]),
+            discord_bot_guild_count(CONFIG["casino_bot_token"], "casino"),
+        ),
+    )
     extension = extension_runtime_summary()
     return [
         {

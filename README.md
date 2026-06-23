@@ -129,6 +129,8 @@ EXTENSION_BOT_CLIENT_ID=client_id_bot_extension
 RPC_APPLICATION_ID=application_id_dung_cho_rich_presence
 ADMIN_PASSWORD=mat_khau_admin_manh
 CONTACT_ADMIN_URL=https://discord.gg/...
+CASINO_BOT_TOKEN=
+GENERAL_BOT_TOKEN=
 CASINO_SERVER_COUNT=0
 GENERAL_SERVER_COUNT=0
 ```
@@ -137,7 +139,7 @@ GENERAL_SERVER_COUNT=0
 
 `implicit` là chế độ mặc định: Discord trả một access token ngắn hạn với đúng scope `identify guilds`; web dùng token đó một lần để tạo session nội bộ rồi không lưu lại. Chế độ này không phụ thuộc `DISCORD_CLIENT_SECRET`, tránh lỗi secret thuộc nhầm Application. Nếu muốn dùng Authorization Code Grant truyền thống, đặt `DISCORD_OAUTH_MODE=code`; khi đó Client ID và Client Secret phải thuộc cùng một Application. Redirect URL trên Portal phải khớp tuyệt đối, kể cả `https`, domain và path. Source archive cũ không có web login; `config.json` của nó chỉ đăng nhập bot bằng token.
 
-Nếu sau này bot ghi được số server thật vào API/database thì có thể thay phần status. Hiện tại web dùng `GENERAL_SERVER_COUNT`, `CASINO_SERVER_COUNT`; bot tổng còn có số server đã kích hoạt key làm fallback.
+Status tự dò số server theo thứ tự: bot runtime/Discord bot token nếu có, database nếu có cột `guild_id`/`server_id`, rồi fallback theo key đã kích hoạt. `GENERAL_SERVER_COUNT` và `CASINO_SERVER_COUNT` chỉ là override thủ công; để trống hoặc `0` nghĩa là tự dò.
 
 ## Deploy Ubuntu 22.04
 
@@ -165,6 +167,9 @@ Environment=EXTENSION_BOT_CLIENT_ID=extension_bot_client_id
 Environment=RPC_APPLICATION_ID=discord_application_id_for_rich_presence
 Environment=ADMIN_PASSWORD=change_this_password
 Environment=CONTACT_ADMIN_URL=https://discord.gg/your-support
+# Optional để Status đọc số server đang join trực tiếp từ Discord API:
+# Environment=CASINO_BOT_TOKEN=casino_bot_token
+# Environment=GENERAL_BOT_TOKEN=general_bot_token
 Environment=CASINO_SERVER_COUNT=0
 Environment=GENERAL_SERVER_COUNT=0
 Environment=EXTENSION_SERVER_COUNT=0
@@ -173,6 +178,8 @@ Environment=VERIFY_ROLE_NAME=Verified
 # Optional nếu muốn dùng một role có sẵn (phù hợp khi bot chỉ chạy một server):
 # Environment=VERIFY_ROLE_ID=123456789012345678
 Environment=VOICE_STATE_PATH=/opt/bleck-lous-web/archive_bot/data/voice_state.json
+Environment=VOICE_RECONNECT_BASE_DELAY=15
+Environment=VOICE_RECONNECT_MAX_DELAY=300
 # Optional. Leave empty/commented for web-only mode.
 # Use the Bot token from Discord Developer Portal to run the voice bot too.
 # Environment=DISCORD_TOKEN=your_bot_token

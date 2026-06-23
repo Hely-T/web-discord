@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 import discord
@@ -13,6 +14,17 @@ from discord.ext import commands, tasks
 logger = logging.getLogger("Voice")
 ARCHIVE_DIR = Path(__file__).resolve().parents[1]
 VOICE_STATE_PATH = Path(os.getenv("VOICE_STATE_PATH", str(ARCHIVE_DIR / "data" / "voice_state.json")))
+
+
+def env_float(name, default):
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return float(default)
+
+
+VOICE_RECONNECT_BASE_DELAY = env_float("VOICE_RECONNECT_BASE_DELAY", 15.0)
+VOICE_RECONNECT_MAX_DELAY = env_float("VOICE_RECONNECT_MAX_DELAY", 300.0)
 
 # --- LOAD OPUS LIBRARY ---
 def load_opus_lib():
@@ -38,6 +50,8 @@ class Voice(commands.Cog):
         self.auto_reconnect_channels = self.load_voice_state()
         self.reconnect_locks = {}
         self.reconnect_tasks = {}
+        self.reconnect_failures = {}
+        self.reconnect_not_before = {}
         self.voice_monitor.start()
 
     def cog_unload(self):
@@ -77,18 +91,45 @@ class Voice(commands.Cog):
             logger.error("Không lưu được voice state %s: %s", VOICE_STATE_PATH, exc)
 
     def set_auto_reconnect(self, guild_id, channel_id):
-        self.auto_reconnect_channels[int(guild_id)] = int(channel_id)
-        self.voice_timers.setdefault(int(guild_id), datetime.datetime.now())
+        guild_id = int(guild_id)
+        self.auto_reconnect_channels[guild_id] = int(channel_id)
+        self.voice_timers.setdefault(guild_id, datetime.datetime.now())
+        self.reset_reconnect_backoff(guild_id)
         self.save_voice_state()
 
     def clear_auto_reconnect(self, guild_id):
         guild_id = int(guild_id)
         self.auto_reconnect_channels.pop(guild_id, None)
         self.voice_timers.pop(guild_id, None)
+        self.reset_reconnect_backoff(guild_id)
         task = self.reconnect_tasks.pop(guild_id, None)
         if task and not task.done():
             task.cancel()
         self.save_voice_state()
+
+    def reset_reconnect_backoff(self, guild_id):
+        guild_id = int(guild_id)
+        self.reconnect_failures.pop(guild_id, None)
+        self.reconnect_not_before.pop(guild_id, None)
+
+    def mark_reconnect_failure(self, guild_id, guild_name, channel_name, reason):
+        guild_id = int(guild_id)
+        failures = self.reconnect_failures.get(guild_id, 0) + 1
+        self.reconnect_failures[guild_id] = failures
+        delay = min(
+            VOICE_RECONNECT_MAX_DELAY,
+            VOICE_RECONNECT_BASE_DELAY * (2 ** min(failures - 1, 5)),
+        )
+        self.reconnect_not_before[guild_id] = time.monotonic() + delay
+        logger.warning(
+            "Voice reconnect thất bại %s / %s lần %s; thử lại sau %.0fs: %s",
+            guild_name,
+            channel_name,
+            failures,
+            delay,
+            reason,
+        )
+        return delay
 
     def schedule_reconnect(self, guild_id, delay=2.0):
         guild_id = int(guild_id)
@@ -97,6 +138,8 @@ class Voice(commands.Cog):
         current = self.reconnect_tasks.get(guild_id)
         if current and not current.done():
             return
+        cooldown = max(0.0, self.reconnect_not_before.get(guild_id, 0.0) - time.monotonic())
+        delay = max(float(delay), cooldown)
 
         async def reconnect_later():
             try:
@@ -110,24 +153,45 @@ class Voice(commands.Cog):
 
         self.reconnect_tasks[guild_id] = asyncio.create_task(reconnect_later())
 
-    async def ensure_voice_connection(self, guild_id, channel_id):
+    async def cleanup_voice_client(self, guild, voice_client=None):
+        voice_client = voice_client or guild.voice_client
+        if voice_client:
+            try:
+                await asyncio.wait_for(voice_client.disconnect(force=True), timeout=5.0)
+            except Exception:
+                try:
+                    voice_client.cleanup()
+                except Exception:
+                    pass
+        if guild.me and guild.me.voice:
+            try:
+                await guild.change_voice_state(channel=None)
+            except Exception:
+                pass
+        await asyncio.sleep(2.0)
+
+    async def ensure_voice_connection(self, guild_id, channel_id, *, force=False):
         guild_id = int(guild_id)
         channel_id = int(channel_id)
         lock = self.reconnect_locks.setdefault(guild_id, asyncio.Lock())
         async with lock:
             if self.auto_reconnect_channels.get(guild_id) != channel_id:
                 return False
+            if not force:
+                cooldown = self.reconnect_not_before.get(guild_id, 0.0) - time.monotonic()
+                if cooldown > 0:
+                    return False
             guild = self.bot.get_guild(guild_id)
             if not guild:
-                logger.warning("Không tìm thấy server %s để reconnect voice", guild_id)
+                self.mark_reconnect_failure(guild_id, str(guild_id), str(channel_id), "không tìm thấy server")
                 return False
             channel = guild.get_channel(channel_id)
             if not isinstance(channel, (discord.VoiceChannel, discord.StageChannel)):
-                logger.warning("Không tìm thấy room voice %s trong %s", channel_id, guild.name)
+                self.mark_reconnect_failure(guild_id, guild.name, str(channel_id), "không tìm thấy room voice")
                 return False
             permissions = channel.permissions_for(guild.me) if guild.me else None
             if not permissions or not permissions.connect:
-                logger.warning("Bot thiếu quyền Connect vào %s / %s", guild.name, channel.name)
+                self.mark_reconnect_failure(guild_id, guild.name, channel.name, "thiếu quyền Connect")
                 return False
 
             voice_client = guild.voice_client
@@ -139,6 +203,7 @@ class Voice(commands.Cog):
                 and current_channel
                 and current_channel.id == channel_id
             ):
+                self.reset_reconnect_backoff(guild_id)
                 return True
 
             try:
@@ -146,24 +211,22 @@ class Voice(commands.Cog):
                     await voice_client.move_to(channel)
                 else:
                     if voice_client:
-                        try:
-                            await asyncio.wait_for(voice_client.disconnect(force=True), timeout=5.0)
-                        except Exception:
-                            voice_client.cleanup()
-                        await asyncio.sleep(1)
+                        await self.cleanup_voice_client(guild, voice_client)
                     await channel.connect(
                         self_mute=True,
                         self_deaf=False,
                         timeout=20.0,
-                        reconnect=True,
+                        reconnect=False,
                     )
                 self.voice_timers[guild_id] = datetime.datetime.now()
+                self.reset_reconnect_backoff(guild_id)
                 logger.info("Voice connected: %s / %s (persistent)", guild.name, channel.name)
                 return True
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("Voice reconnect thất bại %s / %s: %s", guild.name, channel.name, exc)
+                await self.cleanup_voice_client(guild, voice_client)
+                self.mark_reconnect_failure(guild_id, guild.name, channel.name, exc)
                 return False
 
     @commands.Cog.listener()
@@ -173,23 +236,25 @@ class Voice(commands.Cog):
         if before.channel and not after.channel:
             guild_id = before.channel.guild.id
             if guild_id in self.auto_reconnect_channels:
-                logger.warning("Bot bị disconnect từ %s; reconnect sau 2 giây", before.channel.name)
-                self.schedule_reconnect(guild_id, delay=2.0)
+                logger.warning("Bot bị disconnect từ %s; reconnect theo cooldown.", before.channel.name)
+                self.schedule_reconnect(guild_id, delay=VOICE_RECONNECT_BASE_DELAY)
         elif after.channel:
             target = self.auto_reconnect_channels.get(after.channel.guild.id)
             if target and target != after.channel.id:
                 logger.warning("Bot bị chuyển khỏi room đã ghim; đang chuyển lại")
-                self.schedule_reconnect(after.channel.guild.id, delay=2.0)
+                self.schedule_reconnect(after.channel.guild.id, delay=VOICE_RECONNECT_BASE_DELAY)
 
     @commands.Cog.listener()
     async def on_ready(self):
         for guild_id in self.auto_reconnect_channels:
-            self.schedule_reconnect(guild_id, delay=1.0)
+            self.schedule_reconnect(guild_id, delay=5.0)
 
     @tasks.loop(seconds=15)
     async def voice_monitor(self):
         for guild_id, channel_id in list(self.auto_reconnect_channels.items()):
             try:
+                if self.reconnect_not_before.get(int(guild_id), 0.0) > time.monotonic():
+                    continue
                 await self.ensure_voice_connection(guild_id, channel_id)
             except asyncio.CancelledError:
                 raise
