@@ -25,6 +25,7 @@ def env_float(name, default):
 
 VOICE_RECONNECT_BASE_DELAY = env_float("VOICE_RECONNECT_BASE_DELAY", 15.0)
 VOICE_RECONNECT_MAX_DELAY = env_float("VOICE_RECONNECT_MAX_DELAY", 300.0)
+VOICE_CONNECT_TIMEOUT = env_float("VOICE_CONNECT_TIMEOUT", 30.0)
 
 # --- LOAD OPUS LIBRARY ---
 def load_opus_lib():
@@ -170,6 +171,36 @@ class Voice(commands.Cog):
                 pass
         await asyncio.sleep(2.0)
 
+    async def connect_voice_channel(self, guild, channel):
+        last_error = None
+        for attempt in range(2):
+            try:
+                await channel.connect(
+                    self_mute=True,
+                    self_deaf=False,
+                    timeout=VOICE_CONNECT_TIMEOUT,
+                    reconnect=False,
+                )
+                return True
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                code = getattr(exc, "code", None)
+                if attempt == 0 and code in {4006, 4014, 4015, 4017, None}:
+                    logger.warning(
+                        "Voice session lỗi %s tại %s / %s; reset session rồi thử lại một lần.",
+                        code or type(exc).__name__,
+                        guild.name,
+                        channel.name,
+                    )
+                    await self.cleanup_voice_client(guild)
+                    continue
+                raise
+        if last_error:
+            raise last_error
+        return False
+
     async def ensure_voice_connection(self, guild_id, channel_id, *, force=False):
         guild_id = int(guild_id)
         channel_id = int(channel_id)
@@ -210,14 +241,9 @@ class Voice(commands.Cog):
                 if voice_client and voice_client.is_connected() and current_channel:
                     await voice_client.move_to(channel)
                 else:
-                    if voice_client:
+                    if voice_client or member_channel:
                         await self.cleanup_voice_client(guild, voice_client)
-                    await channel.connect(
-                        self_mute=True,
-                        self_deaf=False,
-                        timeout=20.0,
-                        reconnect=False,
-                    )
+                    await self.connect_voice_channel(guild, channel)
                 self.voice_timers[guild_id] = datetime.datetime.now()
                 self.reset_reconnect_backoff(guild_id)
                 logger.info("Voice connected: %s / %s (persistent)", guild.name, channel.name)

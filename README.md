@@ -178,6 +178,7 @@ Environment=VERIFY_ROLE_NAME=Verified
 # Optional nếu muốn dùng một role có sẵn (phù hợp khi bot chỉ chạy một server):
 # Environment=VERIFY_ROLE_ID=123456789012345678
 Environment=VOICE_STATE_PATH=/opt/bleck-lous-web/archive_bot/data/voice_state.json
+Environment=VOICE_CONNECT_TIMEOUT=30
 Environment=VOICE_RECONNECT_BASE_DELAY=15
 Environment=VOICE_RECONNECT_MAX_DELAY=300
 # Optional. Leave empty/commented for web-only mode.
